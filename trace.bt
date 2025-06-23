@@ -1,0 +1,372 @@
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <fcntl.h>
+#include <drm/drm.h>
+#include <drm/amdgpu_drm.h>
+
+struct drm_sched_fence {
+	struct dma_fence		scheduled;
+	struct dma_fence		finished;
+}
+
+struct spsc_node {
+	struct spsc_node *next;
+}
+
+enum drm_sched_priority {
+	DRM_SCHED_PRIORITY_KERNEL,
+	DRM_SCHED_PRIORITY_HIGH,
+	DRM_SCHED_PRIORITY_NORMAL,
+	DRM_SCHED_PRIORITY_LOW,
+
+	DRM_SCHED_PRIORITY_COUNT
+}
+
+struct drm_gpu_scheduler {
+	const struct drm_sched_backend_ops	*ops;
+	u32				credit_limit;
+	atomic_t			credit_count;
+	long				timeout;
+	const char			*name;
+}
+
+struct drm_sched_job {
+	struct spsc_node		queue_node;
+	struct list_head		list;
+	struct drm_gpu_scheduler	*sched;
+	struct drm_sched_fence		*s_fence;
+	u32				credits;
+	union {
+		struct dma_fence_cb		finish_cb;
+		struct work_struct		work;
+	};
+	uint64_t			id;
+	atomic_t			karma;
+	enum drm_sched_priority		s_priority;
+	struct drm_sched_entity         *entity;
+}
+
+BEGIN {
+  @last = (uint64) 0;
+  @amdgpu_info[AMDGPU_INFO_ACCEL_WORKING] = "ACCEL_WORKING";
+  @amdgpu_info[AMDGPU_INFO_CRTC_FROM_ID] = "CRTC_FROM_ID";
+  @amdgpu_info[AMDGPU_INFO_HW_IP_INFO] = "HW_IP_INFO";
+  @amdgpu_info[AMDGPU_INFO_HW_IP_COUNT] = "HW_IP_COUNT";
+  @amdgpu_info[AMDGPU_INFO_TIMESTAMP] = "TIMESTAMP";
+  @amdgpu_info[AMDGPU_INFO_FW_VERSION] = "FW_VERSION";
+  @amdgpu_info[AMDGPU_INFO_NUM_BYTES_MOVED] = "NUM_BYTES_MOVED";
+  @amdgpu_info[AMDGPU_INFO_VRAM_USAGE] = "VRAM_USAGE";
+  @amdgpu_info[AMDGPU_INFO_GTT_USAGE] = "GTT_USAGE";
+  @amdgpu_info[AMDGPU_INFO_GDS_CONFIG] = "GDS_CONFIG";
+  @amdgpu_info[AMDGPU_INFO_VRAM_GTT] = "VRAM_GTT";
+  @amdgpu_info[AMDGPU_INFO_READ_MMR_REG] = "READ_MMR_REG";
+  @amdgpu_info[AMDGPU_INFO_DEV_INFO] = "DEV_INFO";
+  @amdgpu_info[AMDGPU_INFO_VIS_VRAM_USAGE] = "VIS_VRAM_USAGE";
+  @amdgpu_info[AMDGPU_INFO_NUM_EVICTIONS] = "NUM_EVICTIONS";
+  @amdgpu_info[AMDGPU_INFO_MEMORY] = "MEMORY";
+  @amdgpu_info[AMDGPU_INFO_VCE_CLOCK_TABLE] = "VCE_CLOCK_TABLE";
+  @amdgpu_info[AMDGPU_INFO_VBIOS] = "VBIOS";
+  @amdgpu_info[AMDGPU_INFO_NUM_HANDLES] = "NUM_HANDLES";
+  @amdgpu_info[AMDGPU_INFO_SENSOR] = "SENSOR";
+  @amdgpu_info[AMDGPU_INFO_NUM_VRAM_CPU_PAGE_FAULTS] = "NUM_VRAM_CPU_PAGE_FAULT";
+  @amdgpu_info[AMDGPU_INFO_VRAM_LOST_COUNTER] = "VRAM_LOST_COUNTER";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_FEATURES] = "RAS_ENABLED_FEATURE";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_UMC] = "RAS_ENABLED_UMC";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_SDMA] = "RAS_ENABLED_SDMA";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_GFX] = "RAS_ENABLED_GFX";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_MMHUB] = "RAS_ENABLED_MMHUB";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_ATHUB] = "RAS_ENABLED_ATHUB";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_PCIE] = "RAS_ENABLED_PCIE";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_HDP] = "RAS_ENABLED_HDP";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_XGMI] = "RAS_ENABLED_XGMI";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_DF] = "RAS_ENABLED_DF";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_SMN] = "RAS_ENABLED_SMN";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_SEM] = "RAS_ENABLED_SEM";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_MP0] = "RAS_ENABLED_MP0";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_MP1] = "RAS_ENABLED_MP1";
+  @amdgpu_info[AMDGPU_INFO_RAS_ENABLED_FUSE] = "RAS_ENABLED_FUSE";
+  @amdgpu_info[AMDGPU_INFO_VIDEO_CAPS] = "VIDEO_CAPS";
+  @amdgpu_info[AMDGPU_INFO_MAX_IBS] = "MAX_IBS";
+  @amdgpu_info[AMDGPU_INFO_GPUVM_FAULT] = "GPUVM_FAULT";
+}
+
+tracepoint:syscalls:sys_enter_write / comm == "vulkan-test" / {
+  if (elapsed - @last > 1000000 && @last > 0) { printf("[%d ms]\n", (elapsed - @last) / 1000000); } @last = elapsed;
+  if (args->fd < 3) {
+    if (args->buf[0] == 91) {
+      $msg = str(args->buf + 30, args->count - 30);
+      printf("%s\n", $msg);
+    } else {
+      $msg = str(args->buf, args->count);
+      printf("%s\n", $msg);
+    }
+  } else {
+    $dst = @fd[pid, args->fd];
+    printf("write %d bytes to %s\n", args->count, $dst);
+  }
+}
+
+kprobe:drm_sched_entity_init / comm == "vulkan-test" / {
+  // Remember that this is one of ours.
+  @our_entity[(struct drm_sched_entity *) arg0] = 1;
+  if (elapsed - @last > 1000000 && @last > 0) { printf("[%d ms]\n", (elapsed - @last) / 1000000); } @last = elapsed;
+  $sched_list = (struct drm_gpu_scheduler **) arg2;
+  $n = (int32) arg3;
+  if ($n == 1) {
+    printf("  drm_sched_entity_init ([%s])\n", str($sched_list[0]->name));
+  } else if ($n == 2) {
+    printf("  drm_sched_entity_init ([%s, %s])\n", str($sched_list[0]->name), str($sched_list[1]->name));
+  } else if ($n > 2) {
+    printf("  drm_sched_entity_init ([%s, %s, ...])\n", str($sched_list[0]->name), str($sched_list[1]->name));
+  }
+}
+
+// There is a tracepoint, but it doesn't give us the job itself!
+kprobe:drm_sched_entity_push_job {
+  $sched_job = (struct drm_sched_job *) arg0;
+  if (@our_entity[$sched_job->entity] || @mm_fault[tid]) {
+    if (@mm_fault[tid]) { printf("  (via amdgpu_bo_fault_reserve_notify)\n"); }
+    $s_fence = $sched_job->s_fence;
+    $scheduled = $s_fence->scheduled;
+    $finished = $s_fence->finished;
+    if (elapsed - @last > 1000000 && @last > 0) { printf("[%d ms]\n", (elapsed - @last) / 1000000); } @last = elapsed;
+    printf("  drm_sched_job (sched=%d:%d finished=%d:%d)\n",
+      $scheduled.context, $scheduled.seqno,
+      $finished.context,  $finished.seqno);
+    @job[$sched_job] = 1;
+    @fence[$scheduled.context, $scheduled.seqno] = 1;
+    @fence[$finished.context, $finished.seqno] = 1;
+  }
+}
+
+kprobe:amdgpu_job_run {
+  $sched_job = (struct drm_sched_job *) arg0;
+  if (@job[$sched_job]) {
+    @amdgpu_job_run[tid] = 1;
+    @amdgpu_job_run_args[tid] = (str($sched_job->sched->name),
+                                 $sched_job->s_fence->finished.context,
+                                 $sched_job->s_fence->finished.seqno);
+    $fence = $sched_job->s_fence->finished;
+  }
+}
+
+kretprobe:amdgpu_job_run / @amdgpu_job_run[tid] / {
+  $x = @amdgpu_job_run_args[tid];
+  $parent = (struct dma_fence *) retval;
+  @fence[$parent->context, $parent->seqno] = 1;
+  printf("  amdgpu_job_run on %s (finished=%d:%d) => parent=%d:%d\n",
+    $x.0, $x.1, $x.2,
+    $parent->context, $parent->seqno);
+  delete(@amdgpu_job_run[tid]);
+  delete(@amdgpu_job_run_args[tid]);
+}
+
+tracepoint:syscalls:sys_enter_openat / comm == "vulkan-test" / {
+  @open[tid] = str(args->filename);
+}
+
+tracepoint:syscalls:sys_exit_openat / comm == "vulkan-test" / {
+  if (args->ret >= 0) {
+    if (elapsed - @last > 1000000 && @last > 0) { printf("[%d ms]\n", (elapsed - @last) / 1000000); } @last = elapsed;
+    printf("open(%s) => %d\n", @open[tid], args->ret);
+    @fd[pid, args->ret] = @open[tid];
+  }
+  delete(@open[tid]);
+}
+
+tracepoint:syscalls:sys_enter_fcntl / comm == "vulkan-test" / {
+  if (args->cmd == F_DUPFD || args->cmd == F_DUPFD_CLOEXEC) {
+    @dup[tid] = (int64) args->fd;
+  } else {
+    @dup[tid] = (int64) -1;
+  }
+}
+
+tracepoint:syscalls:sys_exit_fcntl / comm == "vulkan-test" / {
+  $src = @dup[tid];
+  delete(@dup[tid]);
+  if ($src != -1) {
+    @fd[pid, args->ret] = @fd[pid, $src];
+    printf("dup %d to %d\n", $src, args->ret);
+  }
+}
+
+tracepoint:syscalls:sys_enter_connect / comm == "vulkan-test" / {
+  if (elapsed - @last > 1000000 && @last > 0) { printf("[%d ms]\n", (elapsed - @last) / 1000000); } @last = elapsed;
+  $addr = (struct sockaddr_un *) args->uservaddr;
+  if ($addr->sun_family == AF_UNIX) {
+    $dst = $addr->sun_path;
+    printf("connect(\"%s\")\n", $dst);
+    @fd[pid, args->fd] = $dst;
+  } else {
+    printf("connect(other)\n");
+  }
+}
+
+tracepoint:syscalls:sys_enter_ioctl / comm == "vulkan-test" / {
+  @ioctl[tid] = args->cmd;
+  @ioctl_fd[tid] = args->fd;
+  @ioctl_arg[tid] = args->arg;
+}
+
+tracepoint:syscalls:sys_exit_ioctl / comm == "vulkan-test" / {
+  if (elapsed - @last > 1000000 && @last > 0) { printf("[%d ms]\n", (elapsed - @last) / 1000000); } @last = elapsed;
+  $cmd = @ioctl[tid] & 0xff;
+  $arg = @ioctl_arg[tid];
+  $fd = @ioctl_fd[tid];
+  delete(@ioctl[tid]);
+  delete(@ioctl_fd[tid]);
+  delete(@ioctl_arg[tid]);
+
+  $name = @fd[pid, $fd];
+
+  if ($name == "/dev/udmabuf") {
+    if ($cmd == 0x42) {
+      printf("ioctl(%s, UDMABUF_CREATE) => fd %d\n", $name, args->ret);
+      @fd[pid, args->ret] = "dmabuf";
+    } else {
+      printf("ioctl(%s, 0x%x) = %d\n", $name, $cmd, args->ret);
+    }
+  } else if ($name == "dmabuf") {
+    if ($cmd == 0x02) {
+      $data = (struct dma_buf_export_sync_file *) $arg;
+      printf("ioctl(%d, DMA_BUF_IOCTL_EXPORT_SYNC_FILE) => fd %d\n", $fd, $data->fd);
+      @fd[pid, $data->fd] = "sync";
+    } else if ($cmd == 0x03) {
+      printf("ioctl(%d, DMA_BUF_IOCTL_IMPORT_SYNC_FILE)\n", $fd);
+    } else {
+      printf("ioctl(%d, 0x%x) = %d\n", $fd, $cmd, args->ret);
+    }
+  } else {
+    if ($cmd == 0x0c) {
+      printf("ioctl(%s, GET_CAP)\n", $name);
+    } else if ($cmd == 0x00) {
+      $data = (struct drm_version *) $arg;
+      printf("ioctl(%s, VERSION) => %s %d.%d\n", $name,
+        str($data->name, $data->name_len + 1), $data->version_major, $data->version_minor);
+    } else if ($cmd == 0x09) {
+      printf("ioctl(%s, GEM_CLOSE)\n", $name);
+    } else if ($cmd == 0x2d) {
+      $data = (struct drm_prime_handle *) $arg;
+      printf("ioctl(%s, PRIME_HANDLE_TO_FD, %d) => fd %d\n", $name, $data->handle, $data->fd);
+      @fd[pid, $data->fd] = "dmabuf";
+    } else if ($cmd == 0xbf) {
+      $data = (struct drm_syncobj_create *) $arg;
+      printf("ioctl(%s, SYNCOBJ_CREATE) => handle %d\n", $name, $data->handle);
+    } else if ($cmd == 0xc1) {
+      $data = (struct drm_syncobj_handle *) $arg;
+      printf("ioctl(%s, SYNCOBJ_HANDLE_TO_FD, %d) => fd %d\n", $name, $data->handle, $data->fd);
+      @fd[pid, $data->fd] = "sync";
+    } else if ($cmd == 0xc2) {
+      $data = (struct drm_syncobj_handle *) $arg;
+      printf("ioctl(%s, SYNCOBJ_FD_TO_HANDLE, fd %d, handle %d)\n", $name, $data->fd, $data->handle);
+    } else if ($cmd == 0xc3) {
+      $data = (struct drm_syncobj_wait *) $arg;
+      $handles = (uint32 *) $data->handles;
+      printf("ioctl(%s, SYNCOBJ_WAIT, %d)\n", $name, *$handles);
+    } else if ($cmd == 0xc4) {
+      $data = (struct drm_syncobj_array *) $arg;
+      $handles = (uint32 *) $data->handles;
+      printf("ioctl(%s, SYNCOBJ_RESET, %d)\n", $name, *$handles);
+    } else if ($cmd == 0xca) {
+      $data = (struct drm_syncobj_timeline_wait *) $arg;
+      $handles = (uint32 *) $data->handles;
+      if ($data->flags == 7) {
+        printf("ioctl(%s, SYNCOBJ_TIMELINE_WAIT, %d, ALL|FOR_SUBMIT|AVAILABLE)\n", $name, *$handles);
+      } else {
+        printf("ioctl(%s, SYNCOBJ_TIMELINE_WAIT, %d, %x)\n", $name, *$handles, $data->flags);
+      }
+    } else if ($cmd == 0xc0) {
+      $data = (struct drm_syncobj_destroy *) $arg;
+      printf("ioctl(%s, SYNCOBJ_DESTROY, %d)\n", $name, $data->handle);
+    } else if ($cmd == 0x40) {
+      $data = (struct drm_amdgpu_gem_create_out *) $arg;
+      printf("ioctl(%s, AMDGPU_GEM_CREATE) => handle %d\n", $name, $data->handle);
+    } else if ($cmd == 0x41) {
+      printf("ioctl(%s, AMDGPU_GEM_MMAP)\n", $name);
+    } else if ($cmd == 0x42) {
+      printf("ioctl(%s, AMDGPU_CTX)\n", $name);
+    } else if ($cmd == 0x44) {
+      $data = (struct drm_amdgpu_cs_out *) $arg;
+      printf("ioctl(%s, AMDGPU_CS) => handle %d\n", $name, $data->handle);
+    } else if ($cmd == 0x45) {
+      $data = (struct drm_amdgpu_info *) $arg;
+      printf("ioctl(%s, AMDGPU_INFO, %s)\n", $name, @amdgpu_info[$data->query]);
+    } else if ($cmd == 0x46) {
+      printf("ioctl(%s, AMDGPU_GEM_METADATA)\n", $name);
+    } else if ($cmd == 0x48) {
+      $data = (struct drm_amdgpu_gem_va *) $arg;
+      printf("ioctl(%s, AMDGPU_GEM_VA, %d)\n", $name, $data->handle);
+    } else {
+      printf("ioctl(%s, 0x%x) = %d\n", $name, $cmd, args->ret);
+    }
+  }
+}
+
+tracepoint:syscalls:sys_enter_newfstatat / comm == "vulkan-test" / {
+  @stat[tid] = (str(args->filename), args->statbuf);
+}
+
+tracepoint:syscalls:sys_exit_newfstatat / comm == "vulkan-test" / {
+  $filename = @stat[tid].0;
+  $buf = @stat[tid].1;
+  delete(@stat[tid]);
+  $dev = $buf->st_rdev;
+  if (args->ret == 0 && $dev) {
+    if (elapsed - @last > 1000000 && @last > 0) { printf("[%d ms]\n", (elapsed - @last) / 1000000); } @last = elapsed;
+    printf("stat(%s) => rdev=%d,%d\n", $filename, $dev >> 8, $dev & 0xff);
+  }
+}
+
+tracepoint:syscalls:sys_enter_readlink / comm == "vulkan-test" / {
+  @readlink[tid] = (str(args->path), args->buf, args->bufsiz);
+}
+
+tracepoint:syscalls:sys_exit_readlink / comm == "vulkan-test" / {
+  if (args->ret >= 0) {
+    $args = @readlink[tid];
+    printf("readlink(%s) => %s\n", $args.0, str($args.1, args->ret));
+  }
+}
+
+kprobe:amdgpu_bo_fault_reserve_notify / comm == "vulkan-test" / {
+  @mm_fault[tid] = 1;
+}
+
+kretprobe:amdgpu_bo_fault_reserve_notify / comm == "vulkan-test" / {
+  delete(@mm_fault[tid]);
+}
+
+kprobe:dma_resv_get_fences / comm == "vulkan-test" / {
+  @get_fences_count[tid] = (uint64 *) arg2;
+}
+
+kretprobe:dma_resv_get_fences / comm == "vulkan-test" / {
+  printf("  dma_resv_get_fences => %d fences\n", *@get_fences_count[tid]);
+}
+
+tracepoint:dma_fence:dma_fence_destroy {
+  if (@fence[args->context, args->seqno] != 0) {
+    //printf("  dma_fence_destroy %d:%d\n", args->context, args->seqno);
+    delete(@fence[args->context, args->seqno]);
+  }
+}
+
+tracepoint:dma_fence:dma_fence_signaled {
+  $owner = @fence[args->context, args->seqno];
+  if ($owner != 0) {
+    if (elapsed - @last > 1000000 && @last > 0) { printf("[%d ms]\n", (elapsed - @last) / 1000000); } @last = elapsed;
+    printf("  dma_fence_signaled %d:%d\n", args->context, args->seqno);
+  }
+}
+
+END {
+  clear(@fd);
+  clear(@amdgpu_info);
+  clear(@last);
+  clear(@fence);
+  clear(@job);
+  clear(@our_entity);
+  clear(@get_fences_count);
+  clear(@readlink);
+}

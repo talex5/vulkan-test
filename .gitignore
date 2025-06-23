@@ -1,0 +1,6 @@
+vulkan-test
+**/*.spv
+xdg-shell-protocol.c
+xdg-shell-client-protocol.h
+linux-dmabuf-v1.c
+linux-dmabuf-v1.h
