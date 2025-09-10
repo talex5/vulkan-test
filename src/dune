@@ -1,0 +1,13 @@
+(executable
+ (name main)
+ (preprocess (pps ppx_blob))
+ (preprocessor_deps (file vert.spv) (file frag.spv))
+ (libraries fmt olivine eio_main wayland wayland.protocols logs.fmt drm))
+
+(rule
+ (target vert.spv)
+ (action (run glslc %{dep:../shaders/shader.vert} -o %{target})))
+
+(rule
+ (target frag.spv)
+ (action (run glslc %{dep:../shaders/shader.frag} -o %{target})))

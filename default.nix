@@ -1,18 +1,17 @@
-{ pkgs, pkgconf, shaderc, vulkan-headers, vulkan-loader, vulkan-validation-layers, wayland, libffi,
-  wayland-protocols, wayland-scanner, libdrm, linuxHeaders }:
+{ pkgs, pkgconf, shaderc, vulkan-loader, vulkan-validation-layers, libffi, libdrm, linuxHeaders, ocamlPackages }:
 
 pkgs.stdenv.mkDerivation {
-  name = "vulkan-test-c";
+  name = "vulkan-test-ocaml";
 
   src = ./.;
 
   buildInputs = [
-    pkgconf shaderc vulkan-headers vulkan-loader vulkan-validation-layers wayland libffi
-    wayland-protocols wayland-scanner libdrm
-  ];
+    pkgconf shaderc vulkan-loader vulkan-validation-layers libffi libdrm
+  ] ++ (with ocamlPackages; [
+    dune_3 dune-configurator ocaml ppxlib integers ppx_blob findlib ctypes-foreign ctypes
+    xmlm fmt menhir eio_main ocamlPackages.wayland
+  ]);
 
   LINUX_HEADERS = linuxHeaders;
-
-  # Use $CC as it allows for stdenv to reference the correct C compiler
   buildPhase = ''make'';
 }
