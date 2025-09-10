@@ -1,0 +1,5 @@
+(library
+ (name aster)
+ (libraries ppxlib econfig info)
+ (preprocess (pps ppxlib.metaquot))
+ (flags :standard -open Ppxlib))
