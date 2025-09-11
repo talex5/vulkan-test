@@ -1,4 +1,5 @@
 vulkan-test
+*.log
 **/*.spv
 xdg-shell-protocol.c
 xdg-shell-client-protocol.h
