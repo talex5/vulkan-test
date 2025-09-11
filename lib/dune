@@ -1,0 +1,15 @@
+; Include the generated rule for creating the source files from the XML
+(dynamic_include ../spec/dune.gen)
+
+(library
+ (public_name olivine)
+ (name vk)
+ (libraries ctypes.foreign)
+ (wrapped false)
+ (flags (:standard -w "-6-27-34-3-32-67-73"))
+ (foreign_stubs
+   ; ocamlopt works without needing stubs, but ocamlc doesn't link correctly without them for some reason.
+  (language c)
+  (flags (:include flags/cflags.sexp))
+  (names stubs))
+ (c_library_flags (:standard (:include flags/libs.sexp))))
