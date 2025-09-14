@@ -2,7 +2,7 @@
  (name main)
  (preprocess (pps ppx_blob))
  (preprocessor_deps (file vert.spv) (file frag.spv))
- (libraries fmt olivine eio_main wayland wayland.protocols logs.fmt drm))
+ (libraries fmt olivine eio_main wayland wayland.protocols logs.fmt drm vulkan))
 
 (rule
  (target vert.spv)
