@@ -1,36 +1,31 @@
 struct UniformBufferObject {
-  float dist;
+  float4x4 rot;
+  float4x4 proj;
 };
 
 layout(binding = 0) uniform ConstantBuffer<UniformBufferObject> ubo;
+Sampler2D texture;
 
-static float2 positions[3] = float2[](
-    float2(0.0, -0.5),
-    float2(0.5, 0.5),
-    float2(-0.5, 0.5)
-);
-
-static float3 colours[3] = float3[](
-    float3(1.0, 0.0, 0.0),
-    float3(0.0, 1.0, 0.0),
-    float3(0.0, 0.0, 1.0)
-);
+struct VSInput {
+    float3 inPosition;
+    float2 inTexCoord;
+};
 
 struct VSOutput {
     float4 pos : SV_Position;
-    float3 colour;
+    float2 fragTexCoord;
 };
 
 [shader("vertex")]
-VSOutput vertMain(uint vid : SV_VertexID) {
+VSOutput vertMain(VSInput input) {
     VSOutput output;
-    output.pos = float4(positions[vid], 0.0, 1.0);
-    output.pos.x += ubo.dist;
-    output.colour = colours[vid];
+    float4 model = mul(ubo.rot, float4(input.inPosition, 1.0));
+    output.pos = mul(ubo.proj, model);
+    output.fragTexCoord = input.inTexCoord;
     return output;
 }
 
 [shader("fragment")]
 float4 fragMain(VSOutput inVert) : SV_Target {
-    return float4(inVert.colour, 1.0);
+    return texture.Sample(inVert.fragTexCoord);
 }

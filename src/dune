@@ -2,7 +2,7 @@
   (name main)
   (preprocess (pps ppx_blob))
   (preprocessor_deps (file slang.spv))
-  (libraries fmt olivine eio_main wayland wayland.protocols logs.fmt drm vulkan))
+  (libraries fmt olivine eio_main wayland wayland.protocols logs.fmt drm vulkan cairo2))
 
 (rule
   (target slang.spv)

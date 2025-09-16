@@ -9,7 +9,7 @@ pkgs.stdenv.mkDerivation {
     pkgconf shader-slang vulkan-loader vulkan-validation-layers libffi libdrm
   ] ++ (with ocamlPackages; [
     dune_3 dune-configurator ocaml ppxlib integers ppx_blob findlib ctypes-foreign ctypes
-    xmlm fmt menhir eio_main ocamlPackages.wayland
+    xmlm fmt menhir eio_main ocamlPackages.wayland cairo2
   ]);
 
   LINUX_HEADERS = linuxHeaders;

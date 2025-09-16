@@ -1,5 +1,7 @@
 open Common
 
+type t = Vkt.Command_buffer.t
+
 type pool = {
   device : Device.t;
   command_pool : Vkt.Command_pool.t;

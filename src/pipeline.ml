@@ -8,6 +8,7 @@ let shader_code = [%blob "./slang.spv"]
 type t = {
   render_pass : Vkt.Render_pass.t;
   graphics_pipeline : Vkt.Pipeline.t;
+  vertex_buffer : Vertices.t;
 }
 
 (* The render needs a colour image, which it clears and then writes to. *)
@@ -26,20 +27,35 @@ let render_pass format =
       ~attachment:0
       ~layout:Color_attachment_optimal
   in
+  let depth_attachment = Vkt.Attachment_description.make ()
+      ~format:Vkt.Format.D32_sfloat
+      ~samples:Vkt.Sample_count_flags.n1
+      ~load_op:Clear
+      ~store_op:Dont_care
+      ~stencil_load_op:Dont_care
+      ~stencil_store_op:Dont_care
+      ~initial_layout:Undefined
+      ~final_layout:Depth_stencil_attachment_optimal
+  in
+  let depth_attachment_ref = Vkt.Attachment_reference.make
+      ~attachment:1
+      ~layout:Depth_attachment_stencil_read_only_optimal
+  in
   let subpass = Vkt.Subpass_description.make ()
       ~pipeline_bind_point:Graphics
       ~color_attachments:(Vkt.Attachment_reference.array [color_attachment_ref])
+      ~depth_stencil_attachment:depth_attachment_ref
   in
   let dependency = Vkt.Subpass_dependency.make ()
       ~src_subpass:(Unsigned.UInt.to_int Vk.Const.subpass_external)
       ~dst_subpass:0
-      ~src_stage_mask:Vkt.Pipeline_stage_flags.color_attachment_output
-      ~src_access_mask:Vkt.Access_flags.empty
-      ~dst_stage_mask:Vkt.Pipeline_stage_flags.color_attachment_output
-      ~dst_access_mask:Vkt.Access_flags.color_attachment_write
+      ~src_stage_mask:Vkt.Pipeline_stage_flags.(color_attachment_output + late_fragment_tests)
+      ~dst_stage_mask:Vkt.Pipeline_stage_flags.(color_attachment_output + early_fragment_tests)
+      ~src_access_mask:Vkt.Access_flags.depth_stencil_attachment_write
+      ~dst_access_mask:Vkt.Access_flags.(depth_stencil_attachment_write + color_attachment_write)
   in
   Vkt.Render_pass_create_info.make ()
-    ~attachments:(Vkt.Attachment_description.array [color_attachment])
+    ~attachments:(Vkt.Attachment_description.array [color_attachment; depth_attachment])
     ~subpasses:(Vkt.Subpass_description.array [subpass])
     ~dependencies:(Vkt.Subpass_dependency.array [dependency])
 
@@ -93,13 +109,37 @@ let no_multisampling = Vkt.Pipeline_multisample_state_create_info.make ()
     ~alpha_to_coverage_enable:false
     ~alpha_to_one_enable:false
 
-let no_vertex_inputs = Vkt.Pipeline_vertex_input_state_create_info.make ()
+let no_stencil_op = Vkt.Stencil_op_state.make
+    ~fail_op:Vkt.Stencil_op.Zero
+    ~pass_op:Vkt.Stencil_op.Zero
+    ~depth_fail_op:Vkt.Stencil_op.Zero
+    ~compare_op:Vkt.Compare_op.Never
+    ~compare_mask:0
+    ~write_mask:0
+    ~reference:0
+
+let depth_testing = Vkt.Pipeline_depth_stencil_state_create_info.make ()
+    ~depth_test_enable:true
+    ~depth_write_enable:true
+    ~depth_compare_op:Less
+    ~depth_bounds_test_enable:false
+    ~stencil_test_enable:false
+    ~front:no_stencil_op
+    ~back:no_stencil_op
+    ~min_depth_bounds:0.0
+    ~max_depth_bounds:0.0
 
 let triangle_list = Vkt.Pipeline_input_assembly_state_create_info.make ()
     ~topology:Triangle_list
     ~primitive_restart_enable:false
 
-let create ~sw ~format device =
+let vertices = Vkt.Pipeline_vertex_input_state_create_info.make ()
+    ~vertex_binding_descriptions:(Vkt.Vertex_input_binding_description.(array [
+        make ~binding:0 ~stride:(Ctypes.sizeof Vertex.ctype) ~input_rate:Vertex;
+      ]))
+    ~vertex_attribute_descriptions:Vertex.attr_desc
+
+let create ~sw ~format ~device (obj, texture_png) =
   let shader_stages =
     let load = Vulkan.Shader.load ~sw device shader_code in [
       load "vertMain" Vkt.Shader_stage_flags.vertex;
@@ -117,13 +157,19 @@ let create ~sw ~format device =
       ~depth_bias_clamp:0.0
       ~depth_bias_slope_factor:0.0
   in
+  let vertex_buffer = Vertices.allocate ~sw ~device obj in
   let render_pass = Vulkan.Device.create_render_pass ~sw device (render_pass format) in
-  let layout, inputs = Input.create ~sw ~device in
+  let command_pool = Vulkan.Cmd.create_pool ~sw device in
+  let texture =
+    let img = Texture.create ~sw ~command_pool ~device texture_png in
+    Vulkan.Image.create_view ~sw ~format ~device ~aspect_mask:Vkt.Image_aspect_flags.color img
+  in
+  let layout, inputs = Input.create ~sw ~device ~texture in
   let graphics_pipeline =
     Vulkan.Device.create_pipeline ~sw device @@
     Vkt.Graphics_pipeline_create_info.make ()
       ~stages:(Vkt.Pipeline_shader_stage_create_info.array shader_stages)
-      ~vertex_input_state:no_vertex_inputs
+      ~vertex_input_state:vertices
       ~input_assembly_state:triangle_list
       ~viewport_state:dummy_viewport_state
       ~rasterization_state:rasterizer
@@ -131,16 +177,21 @@ let create ~sw ~format device =
       ~color_blend_state:no_colour_blending
       ~dynamic_state:dynamic_viewport_and_scissor
       ~layout
-      ~render_pass:render_pass
+      ~render_pass
       ~subpass:0
       ~base_pipeline_index:0
+      ~depth_stencil_state:depth_testing
   in
-  { render_pass; graphics_pipeline}, inputs
+  { render_pass; graphics_pipeline; vertex_buffer }, inputs
 
 let record t input cmd framebuffer =
   let { Vulkan.Swap_chain.framebuffer; geometry = (width, height); _ } = framebuffer in
   let black = Vkt.Clear_color_value.float_32 (float_array [0.0; 0.0; 0.0; 1.0]) in
-  let clear_values = Vkt.Clear_value.array [Vkt.Clear_value.color black] in
+  let far = Vkt.Clear_depth_stencil_value.make ~depth:1.0 ~stencil:0 in
+  let clear_values = Vkt.Clear_value.array [
+      Vkt.Clear_value.color black;
+      Vkt.Clear_value.depth_stencil far;
+    ] in
   let render_area = rect ~x:0 ~y:0 ~width ~height in
   let info = Vkt.Render_pass_begin_info.make ~render_pass:t.render_pass ~framebuffer ~render_area ~clear_values () in
   Vulkan.Cmd.render_pass cmd info ~subpass_contents:Inline (fun () ->
@@ -148,5 +199,5 @@ let record t input cmd framebuffer =
       Vulkan.Cmd.set_viewport cmd ~first_viewport:0 [viewport ~width ~height];
       Vulkan.Cmd.set_scissor cmd ~first_scissor:0 [render_area];
       Input.bind input cmd;
-      Vulkan.Cmd.draw cmd ~vertex_count:3 ~instance_count:1 ~first_vertex:0 ~first_instance:0
+      Vertices.record t.vertex_buffer cmd;
     )

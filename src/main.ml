@@ -5,14 +5,14 @@ let validation_layers = if validation then ["VK_LAYER_KHRONOS_validation"] else 
 
 let app_info = Vulkan.Instance.application_info "vulkan-test-ocaml" ~version:(1,0,0)
 
-let main ~net ~frame_limit =
+let main ~net ~frame_limit model =
   Switch.run @@ fun sw ->
   let instance = Vulkan.Instance.create ~sw ~validation_layers app_info in
   let transport = Wayland.Unix_transport.connect ~sw ~net () in
   let window = Window.init ~sw transport in
   let physical_device = Vulkan.Instance.find_device instance window.wayland_dmabuf.main_device in
   let device = Vulkan.Device.create ~sw physical_device in
-  let render = Render.create ~sw ~device window in
+  let render = Render.create ~sw ~device ~window model in
   while render.frame < frame_limit do
     let next_frame_due = Window.frame window in
     Render.trigger_redraw render;
@@ -30,11 +30,14 @@ let () =
   (* Start event loop *)
   Eio_main.run @@ fun env ->
   (* Parse command-line arguments *)
-  let frame_limit =
-    match Sys.argv with
-    | [| _; x |] -> int_of_string x
-    | _ -> 200
+  let frame_limit, obj, tex =
+    match Array.to_list Sys.argv with
+    | [_; x; obj; tex] -> int_of_string x, obj, tex
+    | [_] -> 200, "viking_room.obj", "viking_room.png"
+    | _ -> failwith "usage: prog frames model.obj model.png"
   in
+  let obj = Eio.Path.(with_lines (env#fs / obj)) Obj_format.parse in
+  let tex = Cairo.PNG.create tex in
   try
-    main ~net:env#net ~frame_limit
+    main ~net:env#net ~frame_limit (obj, tex)
   with Window.Closed -> ()
