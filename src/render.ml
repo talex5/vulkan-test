@@ -43,9 +43,10 @@ let create ~sw ~device ~format =
 
   (* Shaders *)
 
+  let load = Vulkan.Shader.load ~sw device [%blob "./slang.spv"] in
   let shader_stages = Vkt.Pipeline_shader_stage_create_info.array [
-      Vulkan.Shader.load ~sw device [%blob "./vert.spv"] "main" Vkt.Shader_stage_flags.vertex;
-      Vulkan.Shader.load ~sw device [%blob "./frag.spv"] "main" Vkt.Shader_stage_flags.fragment;
+      load "vertMain" Vkt.Shader_stage_flags.vertex;
+      load "fragMain" Vkt.Shader_stage_flags.fragment;
     ]
   in
 

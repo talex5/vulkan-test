@@ -1,13 +1,17 @@
 (executable
- (name main)
- (preprocess (pps ppx_blob))
- (preprocessor_deps (file vert.spv) (file frag.spv))
- (libraries fmt olivine eio_main wayland wayland.protocols logs.fmt drm vulkan))
+  (name main)
+  (preprocess (pps ppx_blob))
+  (preprocessor_deps (file slang.spv))
+  (libraries fmt olivine eio_main wayland wayland.protocols logs.fmt drm vulkan))
 
 (rule
- (target vert.spv)
- (action (run glslc %{dep:../shaders/shader.vert} -o %{target})))
-
-(rule
- (target frag.spv)
- (action (run glslc %{dep:../shaders/shader.frag} -o %{target})))
+  (target slang.spv)
+  (action
+    (run slangc %{dep:shader.slang}
+         -target spirv
+         -profile spirv_1_4
+         -emit-spirv-directly
+         -fvk-use-entrypoint-name
+         -entry vertMain
+         -entry fragMain
+         -o %{target})))
