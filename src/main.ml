@@ -8,7 +8,7 @@ let validation_layers = if validation then ["VK_LAYER_KHRONOS_validation"] else 
 
 let log fmt = Fmt.epr (fmt ^^ "@.")
 
-type state = {
+type t = {
   device : Vulkan.Device.t;
   frames : Render.frame_state array;            (* Pool of framebuffers *)
   window : Window.t;
@@ -21,20 +21,8 @@ type state = {
   command_buffer : Vkt.Command_buffer.t;        (* Used to submit drawing commands *)
 }
 
-(* Called when the Wayland compositor wants us to send the next frame *)
-let rec wl_surface_frame_done t _time =
-  t.frame <- t.frame + 1;
-  if t.frame > t.frame_limit then (
-    log "Frame limit reached; exiting";
-    exit 0;
-  );
-  draw_frame t
-
-and draw_frame t =
+let draw_frame t =
   let device = t.device in
-  let surface = t.window.surface in
-  (* Ask compositor to tell us when it wants the frame after this one *)
-  let _cb : _ Wayland.Proxy.t = Wl_surface.frame surface (Wayland.callback (wl_surface_frame_done t)) in
 
   (* If we're still rendering the last frame, wait for that to finish.
      Needed because e.g. [image_available] isn't per-framebuffer. *)
@@ -75,9 +63,7 @@ and draw_frame t =
 
   (* Tell the compositor to show the new buffer
      (the compositor will wait for render_finished, but we don't) *)
-  Wl_surface.attach surface ~buffer:(Some frame_state.buffer) ~x:0l ~y:0l;
-  Wl_surface.damage surface ~x:0l ~y:0l ~width:Int32.max_int ~height:Int32.max_int;
-  Wl_surface.commit surface
+  Window.attach t.window ~buffer:frame_state.buffer
 
 let app_info = Vulkan.Instance.application_info "vulkan-test-ocaml" ~version:(1,0,0)
 
@@ -95,7 +81,7 @@ let main ~net ~frame_limit =
   let command_buffer = Vulkan.Cmd.allocate_buffer ~sw command_pool in
 
   let format = Vkt.Format.B8g8r8a8_srgb in
-  let width, height = 640, 480 in
+  let width, height = Window.geometry window in
 
   (* Create pipeline and framebuffers *)
   let render_state, inputs = Render.create ~sw ~device ~format in
@@ -154,7 +140,7 @@ let main ~net ~frame_limit =
   in
 
   (* Set up the shared state for the draw_frame callback *)
-  let state = {
+  let t = {
     device;
     command_buffer;
     frames;
@@ -165,8 +151,14 @@ let main ~net ~frame_limit =
     image_available = Vulkan.Semaphore.create ~sw device;
   } in
   log "Start main loop";
-  draw_frame state;
-  Fiber.await_cancel ()
+  while t.frame < frame_limit do
+    let next_frame_due = Window.frame window in
+    draw_frame t;
+    Promise.await next_frame_due;
+    t.frame <- t.frame + 1
+  done;
+  log "Frame limit reached; exiting";
+  Window.destroy window
 
 let () =
   (* Configure logging *)
