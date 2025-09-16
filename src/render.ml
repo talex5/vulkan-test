@@ -8,36 +8,21 @@ let n_images = 4
 
 let float_array = A.of_list Ctypes.float        (* Doesn't require GC protection *)
 
-module Uniform_buffer_object = struct
-  type mark
-  type t = mark Ctypes.structure
-  let view : t Ctypes.typ = Ctypes.structure "Uniform_buffer_object"
-  let ctype = view
-  let dist = Ctypes.field ctype "dist" Ctypes.float
-  let () = Ctypes.seal ctype
-end
-
 type t = {
   render_pass : Vkt.Render_pass.t;
   graphics_pipeline : Vkt.Pipeline.t;
-  pipeline_layout : Vkt.Pipeline_layout.t;
+  duo : Duo.t;
 }
 
 (* There is one of these for each allocated framebuffer *)
 type frame_state = {
-  uniform_buffer_mapped : Uniform_buffer_object.t;      (* Input arguments for shaders *)
-  descriptor_set : Vkt.Descriptor_set.t;	        (* Says to pass uniform_buffer_mapped to shaders *)
   mutable extent : Vkt.Extent_2d.t;			(* Size input for pipeline *)
   framebuffer : Vkt.Framebuffer.t;		        (* Buffer for output image *)
   buffer : [`V1] Wl_buffer.t;		                (* Corresponding Wayland object *)
   dma_buf_fd : Eio_unix.Fd.t;			        (* Corresponding Linux dmabuf *)
   render_finished : Vkt.Semaphore.t;	                (* Signalled when rendering is complete *)
-  ctx : t;		                                (* Holds render_pass, pipeline_layout and graphics_pipeline *)
+  ctx : t;
 }
-
-let bindings = Vulkan.Binding.[
-  v 0 Uniform_buffer Vkt.Shader_stage_flags.vertex;
-]
 
 let create ~sw ~device ~format =
 
@@ -49,10 +34,6 @@ let create ~sw ~device ~format =
       load "fragMain" Vkt.Shader_stage_flags.fragment;
     ]
   in
-
-  (* Pipeline input data *)
-
-  let descriptor_set_layout = Vulkan.Descriptor_set.make_layout ~sw device bindings in
 
   (* Vertex information (none) *)
 
@@ -119,10 +100,6 @@ let create ~sw ~device ~format =
       ~logic_op:Copy
       ~blend_constants:(float_array [0.; 0.; 0.; 0.])
   in
-  let create_info = Vkt.Pipeline_layout_create_info.make ()
-      ~set_layouts:(Vkt.Descriptor_set_layout.array [descriptor_set_layout])
-  in
-  let pipeline_layout = Vulkan.Device.create_pipeline_layout ~sw device create_info in
 
   let color_attachment = Vkt.Attachment_description.make ()
       ~format:format
@@ -160,31 +137,9 @@ let create ~sw ~device ~format =
   let dynamic_states = A.of_list Vkt.Dynamic_state.ctype [ Viewport; Scissor ] in
   let dynamic_state = Vkt.Pipeline_dynamic_state_create_info.make ~dynamic_states () in
 
-  let size = Ctypes.sizeof Uniform_buffer_object.ctype in
-
-  let descriptor_pool = Vulkan.Descriptor_set.create_pool ~sw ~max_sets:n_images device [
-      (Uniform_buffer, n_images)
-    ]
-  in
-
-  let descriptor_sets = Vulkan.Descriptor_set.allocate descriptor_pool descriptor_set_layout n_images in
-
-  let inputs = Array.init n_images (fun i ->
-      let descriptor_set = A.get descriptor_sets i in
-
-      let buffer = Vulkan.Buffer.create ~sw device size
-          ~usage:Vkt.Buffer_usage_flags.uniform_buffer
-          ~properties:Vkt.Memory_property_flags.(host_visible + host_coherent)
-      in
-      let mapped = A.cast_one Uniform_buffer_object.ctype (Vulkan.Buffer.map buffer) in
-
-      let range = Vkt.Device_size.of_int size in
-      let whole_buffer = Vkt.Descriptor_buffer_info.make ~buffer:buffer.buffer ~offset:Vkt.Device_size.zero ~range () in
-      Vulkan.Descriptor_set.update device ~writes:[
-        Vulkan.Descriptor_set.write descriptor_set Uniform_buffer [whole_buffer] ~dst_binding:0 ~dst_array_element:0;
-      ];
-      (mapped, descriptor_set)
-    ) in
+  let layout, inputs = Input.create ~sw ~device in
+  let command_pool = Vulkan.Cmd.create_pool ~sw device in
+  let duo = Duo.make ~sw ~command_pool inputs in
 
   let pipeline_info = Vkt.Graphics_pipeline_create_info.make ()
       ~stages:shader_stages
@@ -195,19 +150,19 @@ let create ~sw ~device ~format =
       ~multisample_state:multisampling
       ~color_blend_state:color_blending
       ~dynamic_state
-      ~layout:pipeline_layout
+      ~layout
       ~render_pass:render_pass
       ~subpass:0
       ~base_pipeline_index:0
   in
   let graphics_pipeline = Vulkan.Device.create_pipeline ~sw device pipeline_info in
-  { render_pass; graphics_pipeline; pipeline_layout }, inputs
+  { render_pass; graphics_pipeline; duo }
 
-let record_commands input ~frame:frame_number command_buffer =
-  let t = input.ctx in
-  let extent = input.extent in
-  let framebuffer = input.framebuffer in
-  Ctypes.setf input.uniform_buffer_mapped Uniform_buffer_object.dist @@ Float.of_int ((frame_number land 0xff) - 100) /. 100.;
+let record_commands frame_state ~frame:frame_number =
+  let t = frame_state.ctx in
+  let extent = frame_state.extent in
+  let framebuffer = frame_state.framebuffer in
+  let { Duo.input; command_buffer } = Duo.next t.duo in
   Vulkan.Cmd.reset command_buffer;
   Vulkan.Cmd.record command_buffer (fun () ->
       let black = Vkt.Clear_color_value.float_32 (float_array [0.0; 0.0; 0.0; 1.0]) in
@@ -228,12 +183,8 @@ let record_commands input ~frame:frame_number command_buffer =
           Vulkan.Cmd.set_viewport command_buffer ~first_viewport:0 [viewport];
           let scissor = Vkt.Rect_2d.make ~offset ~extent in
           Vulkan.Cmd.set_scissor command_buffer ~first_scissor:0 [scissor];
-
-          Vulkan.Cmd.bind_descriptor_sets command_buffer [input.descriptor_set]
-            ~pipeline_bind_point:Graphics
-            ~layout:t.pipeline_layout
-            ~first_set:0;
-
+          Input.set input command_buffer frame_number;
           Vulkan.Cmd.draw command_buffer ~vertex_count:3 ~instance_count:1 ~first_vertex:0 ~first_instance:0;
         );
-    )
+    );
+  command_buffer

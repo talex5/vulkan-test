@@ -18,7 +18,6 @@ type t = {
 
   (* Temporaries used inside draw_frame (only here to avoid recreating them all the time): *)
   image_available : Vkt.Semaphore.t;            (* Signalled when the compositer has finished showing the old image *)
-  command_buffer : Vkt.Command_buffer.t;        (* Used to submit drawing commands *)
 }
 
 let draw_frame t =
@@ -43,11 +42,11 @@ let draw_frame t =
   Vulkan.Semaphore.import t.device frame_state.dma_buf_fd t.image_available;
 
   (* Put commands in [command_buffer] *)
-  Render.record_commands frame_state ~frame:t.frame t.command_buffer;
+  let command_buffer = Render.record_commands frame_state ~frame:t.frame in
 
   (* Submit [command_buffer] to GPU *)
   log "Submit to graphicsQueue";
-  Vulkan.Cmd.submit device t.command_buffer
+  Vulkan.Cmd.submit device command_buffer
     (* Wait for [image_available] before writing the pixel data *)
     ~wait:[t.image_available, Vkt.Pipeline_stage_flags.color_attachment_output]
     ~signal_semaphores:[frame_state.render_finished]
@@ -77,17 +76,15 @@ let main ~net ~frame_limit =
   let window = Window.init ~sw transport in
   let physical_device = Vulkan.Instance.find_device instance window.wayland_dmabuf.main_device in
   let device = Vulkan.Device.create ~sw physical_device in
-  let command_pool = Vulkan.Cmd.create_pool ~sw device in
-  let command_buffer = Vulkan.Cmd.allocate_buffer ~sw command_pool in
 
   let format = Vkt.Format.B8g8r8a8_srgb in
   let width, height = Window.geometry window in
 
   (* Create pipeline and framebuffers *)
-  let render_state, inputs = Render.create ~sw ~device ~format in
+  let render_state = Render.create ~sw ~device ~format in
 
   let frames =
-    inputs |> Array.mapi (fun i (uniform_buffer_mapped, descriptor_set) ->
+    Array.init Render.n_images (fun i ->
         log "Create framebuffer %d" i;
         let render_finished = Vulkan.Semaphore.create_export ~sw device in
 
@@ -135,14 +132,13 @@ let main ~net ~frame_limit =
         let render_pass = render_state.render_pass in
         let framebuffer = Vulkan.Image.create_framebuffer ~sw ~device ~format ~width ~height ~render_pass image in
         let extent = Vkt.Extent_2d.make ~width ~height in
-        { Render.framebuffer; buffer; render_finished; dma_buf_fd; uniform_buffer_mapped; descriptor_set; extent; ctx = render_state }
+        { Render.framebuffer; buffer; render_finished; dma_buf_fd; extent; ctx = render_state }
       )
   in
 
   (* Set up the shared state for the draw_frame callback *)
   let t = {
     device;
-    command_buffer;
     frames;
     window;
     frame = 0;
