@@ -96,7 +96,7 @@ let create_view ~aspect_mask ~sw ~format ~device image =
   Switch.on_release sw (fun () -> Vkc.destroy_image_view (Device.dev device) (Some v) None);
   v
 
-let create_framebuffer ~sw ~device ~format ~width ~height ~render_pass image =
+let create_framebuffer ~sw ~device ~format ~render_pass (width, height) image =
   let view = create_view ~sw ~device ~format ~aspect_mask:Vkt.Image_aspect_flags.color image in
   let attachments = Vkt.Image_view.array [view] in
   let create_info = Vkt.Framebuffer_create_info.make ()

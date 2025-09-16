@@ -110,7 +110,7 @@ let create_buffer ~sw ~on_release ~offset ~stride ~width ~height ~fd t =
     ~modifier_lo:(Int64.to_int32 modifier);
   let buffer = Zwp_linux_buffer_params_v1.create_immed params ~width ~height ~format:t.drm_format.code ~flags:0l @@ object
       inherit [_] Wl_buffer.v1
-      method on_release _ = on_release ()
+      method on_release = on_release
     end
   in
   Zwp_linux_buffer_params_v1.destroy params;

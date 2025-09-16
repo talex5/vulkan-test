@@ -12,6 +12,7 @@ module Cmd = Cmd
 module Image = Image
 module Binding = Binding
 module Descriptor_set = Descriptor_set
+module Swap_chain = Swap_chain
 
 module Format = struct
   let of_drm (drm_format : Drm.Format.t) =
