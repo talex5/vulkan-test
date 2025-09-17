@@ -3,88 +3,15 @@ module A = Vulkan.A
 
 let float_array = A.of_list Ctypes.float        (* Doesn't require GC protection *)
 
+let shader_code = [%blob "./slang.spv"]
+
 type t = {
   render_pass : Vkt.Render_pass.t;
   graphics_pipeline : Vkt.Pipeline.t;
 }
 
-let create ~sw ~format device =
-
-  (* Shaders *)
-
-  let load = Vulkan.Shader.load ~sw device [%blob "./slang.spv"] in
-  let shader_stages = Vkt.Pipeline_shader_stage_create_info.array [
-      load "vertMain" Vkt.Shader_stage_flags.vertex;
-      load "fragMain" Vkt.Shader_stage_flags.fragment;
-    ]
-  in
-
-  (* Vertex information (none) *)
-
-  let vertex_input_info = Vkt.Pipeline_vertex_input_state_create_info.make () in
-  let input_assembly = Vkt.Pipeline_input_assembly_state_create_info.make ()
-      ~topology:Triangle_list
-      ~primitive_restart_enable:false
-  in
-
-  (* Viewport and scissors (values are set dynamically later) *)
-
-  let viewport = Vkt.Viewport.make
-      ~x:0.0
-      ~y:0.0
-      ~width:0.0
-      ~height:0.0
-      ~min_depth:0.0
-      ~max_depth:1.0
-  in
-  let scissor = Vkt.Rect_2d.make
-      ~offset:(Vkt.Offset_2d.make ~x:0 ~y:0)
-      ~extent:(Vkt.Extent_2d.make ~width:0 ~height:0)
-  in
-  let viewport_state = Vkt.Pipeline_viewport_state_create_info.make ()
-      ~viewports:(Vkt.Viewport.array [viewport])
-      ~scissors:(Vkt.Rect_2d.array [scissor])
-  in
-
-  (* Rendering *)
-
-  let rasterizer = Vkt.Pipeline_rasterization_state_create_info.make ()
-      ~depth_clamp_enable:false
-      ~rasterizer_discard_enable:false
-      ~polygon_mode:Fill
-      ~line_width:1.0
-      ~cull_mode:Vkt.Cull_mode_flags.back
-      ~front_face:Clockwise
-      ~depth_bias_enable:false
-      ~depth_bias_constant_factor:0.0
-      ~depth_bias_clamp:0.0
-      ~depth_bias_slope_factor:0.0
-  in
-  let multisampling = Vkt.Pipeline_multisample_state_create_info.make ()
-      ~sample_shading_enable:false
-      ~rasterization_samples:Vkt.Sample_count_flags.n1
-      ~min_sample_shading:0.0
-      ~alpha_to_coverage_enable:false
-      ~alpha_to_one_enable:false
-  in
-  let color_blend_attachment =
-    Vkt.Pipeline_color_blend_attachment_state.make ()
-      ~color_write_mask:Vkt.Color_component_flags.(r + g + b + a)
-      ~blend_enable:false
-      ~src_color_blend_factor:One
-      ~dst_color_blend_factor:Zero
-      ~color_blend_op:Add
-      ~src_alpha_blend_factor:One
-      ~dst_alpha_blend_factor:Zero
-      ~alpha_blend_op:Add
-  in
-  let color_blending = Vkt.Pipeline_color_blend_state_create_info.make ()
-      ~logic_op_enable:false
-      ~attachments:(Vkt.Pipeline_color_blend_attachment_state.array [color_blend_attachment])
-      ~logic_op:Copy
-      ~blend_constants:(float_array [0.; 0.; 0.; 0.])
-  in
-
+(* The render needs a colour image, which it clears and then writes to. *)
+let render_pass format =
   let color_attachment = Vkt.Attachment_description.make ()
       ~format:format
       ~samples:Vkt.Sample_count_flags.n1
@@ -111,33 +38,101 @@ let create ~sw ~format device =
       ~dst_stage_mask:Vkt.Pipeline_stage_flags.color_attachment_output
       ~dst_access_mask:Vkt.Access_flags.color_attachment_write
   in
-  let create_info = Vkt.Render_pass_create_info.make ()
-      ~attachments:(Vkt.Attachment_description.array [color_attachment])
-      ~subpasses:(Vkt.Subpass_description.array [subpass])
-      ~dependencies:(Vkt.Subpass_dependency.array [dependency])
+  Vkt.Render_pass_create_info.make ()
+    ~attachments:(Vkt.Attachment_description.array [color_attachment])
+    ~subpasses:(Vkt.Subpass_description.array [subpass])
+    ~dependencies:(Vkt.Subpass_dependency.array [dependency])
+
+(* Viewport and scissors (values are set dynamically later) *)
+let dummy_viewport_state =
+  let viewport = Vkt.Viewport.make
+      ~x:0.0
+      ~y:0.0
+      ~width:0.0
+      ~height:0.0
+      ~min_depth:0.0
+      ~max_depth:1.0
   in
-  let render_pass = Vulkan.Device.create_render_pass ~sw device create_info in
+  let scissor = Vkt.Rect_2d.make
+      ~offset:(Vkt.Offset_2d.make ~x:0 ~y:0)
+      ~extent:(Vkt.Extent_2d.make ~width:0 ~height:0)
+  in
+  Vkt.Pipeline_viewport_state_create_info.make ()
+    ~viewports:(Vkt.Viewport.array [viewport])
+    ~scissors:(Vkt.Rect_2d.array [scissor])
 
+(* When the fragment shader outputs a pixel, it replaces whatever was already there in the framebuffer. *)
+let no_colour_blending =
+  let no_blend =
+    Vkt.Pipeline_color_blend_attachment_state.make ()
+      ~blend_enable:false
+      ~color_write_mask:Vkt.Color_component_flags.(r + g + b + a)
+      ~src_color_blend_factor:One
+      ~dst_color_blend_factor:Zero
+      ~color_blend_op:Add
+      ~src_alpha_blend_factor:One
+      ~dst_alpha_blend_factor:Zero
+      ~alpha_blend_op:Add
+  in
+  Vkt.Pipeline_color_blend_state_create_info.make ()
+    ~logic_op_enable:false
+    ~attachments:(Vkt.Pipeline_color_blend_attachment_state.array [no_blend])
+    ~logic_op:Copy
+    ~blend_constants:(float_array [0.; 0.; 0.; 0.])
+
+let dynamic_viewport_and_scissor =
   let dynamic_states = A.of_list Vkt.Dynamic_state.ctype [ Viewport; Scissor ] in
-  let dynamic_state = Vkt.Pipeline_dynamic_state_create_info.make ~dynamic_states () in
+  Vkt.Pipeline_dynamic_state_create_info.make ~dynamic_states ()
 
+let no_multisampling = Vkt.Pipeline_multisample_state_create_info.make ()
+    ~sample_shading_enable:false
+    ~rasterization_samples:Vkt.Sample_count_flags.n1
+    ~min_sample_shading:0.0
+    ~alpha_to_coverage_enable:false
+    ~alpha_to_one_enable:false
+
+let no_vertex_inputs = Vkt.Pipeline_vertex_input_state_create_info.make ()
+
+let triangle_list = Vkt.Pipeline_input_assembly_state_create_info.make ()
+    ~topology:Triangle_list
+    ~primitive_restart_enable:false
+
+let create ~sw ~format device =
+  let shader_stages =
+    let load = Vulkan.Shader.load ~sw device shader_code in [
+      load "vertMain" Vkt.Shader_stage_flags.vertex;
+      load "fragMain" Vkt.Shader_stage_flags.fragment;
+    ] in
+  let rasterizer = Vkt.Pipeline_rasterization_state_create_info.make ()
+      ~depth_clamp_enable:false
+      ~rasterizer_discard_enable:false
+      ~polygon_mode:Fill
+      ~line_width:1.0
+      ~cull_mode:Vkt.Cull_mode_flags.back
+      ~front_face:Clockwise
+      ~depth_bias_enable:false
+      ~depth_bias_constant_factor:0.0
+      ~depth_bias_clamp:0.0
+      ~depth_bias_slope_factor:0.0
+  in
+  let render_pass = Vulkan.Device.create_render_pass ~sw device (render_pass format) in
   let layout, inputs = Input.create ~sw ~device in
-
-  let pipeline_info = Vkt.Graphics_pipeline_create_info.make ()
-      ~stages:shader_stages
-      ~vertex_input_state:vertex_input_info
-      ~input_assembly_state:input_assembly
-      ~viewport_state
+  let graphics_pipeline =
+    Vulkan.Device.create_pipeline ~sw device @@
+    Vkt.Graphics_pipeline_create_info.make ()
+      ~stages:(Vkt.Pipeline_shader_stage_create_info.array shader_stages)
+      ~vertex_input_state:no_vertex_inputs
+      ~input_assembly_state:triangle_list
+      ~viewport_state:dummy_viewport_state
       ~rasterization_state:rasterizer
-      ~multisample_state:multisampling
-      ~color_blend_state:color_blending
-      ~dynamic_state
+      ~multisample_state:no_multisampling
+      ~color_blend_state:no_colour_blending
+      ~dynamic_state:dynamic_viewport_and_scissor
       ~layout
       ~render_pass:render_pass
       ~subpass:0
       ~base_pipeline_index:0
   in
-  let graphics_pipeline = Vulkan.Device.create_pipeline ~sw device pipeline_info in
   { render_pass; graphics_pipeline}, inputs
 
 let record t input command_buffer (width, height) framebuffer =
