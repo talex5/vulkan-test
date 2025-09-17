@@ -39,7 +39,7 @@ let create ~sw ~device =
         ~usage:Vkt.Buffer_usage_flags.uniform_buffer
         ~properties:Vkt.Memory_property_flags.(host_visible + host_coherent)
     in
-    let mapped = A.cast_one Uniform_buffer_object.ctype (Vulkan.Buffer.map ubo) in
+    let mapped = A.cast_one Uniform_buffer_object.ctype (Vulkan.Buffer.map ~sw ubo) in
     let range = Vkt.Device_size.of_int Uniform_buffer_object.size in
     let whole_buffer = Vkt.Descriptor_buffer_info.make ~buffer:ubo.buffer ~offset:Vkt.Device_size.zero ~range () in
     Vulkan.Descriptor_set.update device ~writes:[

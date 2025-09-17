@@ -27,7 +27,8 @@ let create ~sw ~usage ~properties device size =
   Vkc.bind_buffer_memory ~device:dev buffer memory ~memory_offset:Vkt.Device_size.zero <?> "bind_buffer_memory";
   { device; buffer; memory; size }
 
-let map ?(flags=Vkt.Memory_map_flags.empty) ?(offset=Vkt.Device_size.zero) t =
+let map ?(flags=Vkt.Memory_map_flags.empty) ?(offset=Vkt.Device_size.zero) ~sw t =
   let { device; memory; size; _ } = t in
   let p = Vkc.map_memory ~device:(Device.dev device) memory ~offset ~size:(Vkt.Device_size.of_int size) ~flags () <?> "map_memory" in
+  Switch.on_release sw (fun () -> Vkc.unmap_memory (Device.dev device) memory);
   A.from_ptr Ctypes.(from_voidp char p) size
