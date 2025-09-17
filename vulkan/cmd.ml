@@ -54,6 +54,18 @@ let render_pass command_buffer render_pass_info ~subpass_contents fn =
   fn ();
   Vkc.cmd_end_render_pass command_buffer
 
+let wait_idle t =
+  Vkc.queue_wait_idle t.device.Device.graphics_queue <?> "queue_wait_idle"
+
+let run_one_time t fn =
+  Switch.run @@ fun sw ->
+  let command_buffer = allocate_buffer ~sw t in
+  record ~flags:Vkt.Command_buffer_usage_flags.one_time_submit command_buffer (fun () ->
+      fn command_buffer;
+    );
+  submit t.device command_buffer;
+  wait_idle t
+
 let bind_pipeline ~stage t pipeline = Vkc.cmd_bind_pipeline t stage pipeline
 
 let set_viewport t ~first_viewport viewports =
@@ -68,5 +80,11 @@ let bind_descriptor_sets ~pipeline_bind_point ~layout ~first_set t sets =
     ~layout
     ~first_set
 
+let bind_vertex_buffers = Vkc.cmd_bind_vertex_buffers
+let bind_index_buffer = Vkc.cmd_bind_index_buffer
+
 let draw t ~first_vertex ~first_instance ~vertex_count ~instance_count =
   Vkc.cmd_draw t vertex_count instance_count first_vertex first_instance
+
+let draw_indexed t ~first_index ~first_instance ~index_count ~instance_count ~vertex_offset =
+  Vkc.cmd_draw_indexed t index_count instance_count first_index vertex_offset first_instance

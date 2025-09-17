@@ -103,3 +103,8 @@ let create_pipeline ~sw t info =
   let x = A.get pipelines 0 in
   Switch.on_release sw (fun () -> Vkc.destroy_pipeline t.device (Some x) None);
   x
+
+let create_sampler ~sw t create_info =
+  let x = Vkc.create_sampler ~device:t.device ~create_info () <?> "create_sampler" in
+  Switch.on_release sw (fun () -> Vkc.destroy_sampler t.device (Some x) None);
+  x

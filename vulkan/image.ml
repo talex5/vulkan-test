@@ -96,9 +96,9 @@ let create_view ~aspect_mask ~sw ~format ~device image =
   Switch.on_release sw (fun () -> Vkc.destroy_image_view (Device.dev device) (Some v) None);
   v
 
-let create_framebuffer ~sw ~device ~format ~render_pass (width, height) image =
-  let view = create_view ~sw ~device ~format ~aspect_mask:Vkt.Image_aspect_flags.color image in
-  let attachments = Vkt.Image_view.array [view] in
+let create_framebuffer ?depth_buffer ~sw ~device ~format ~render_pass (width, height) image =
+  let view = create_view ~sw ~format ~device ~aspect_mask:Vkt.Image_aspect_flags.color image in
+  let attachments = Vkt.Image_view.array ([view] @ Option.to_list depth_buffer) in
   let create_info = Vkt.Framebuffer_create_info.make ()
       ~render_pass
       ~attachments
@@ -109,3 +109,69 @@ let create_framebuffer ~sw ~device ~format ~render_pass (width, height) image =
   let fb = Vkc.create_framebuffer ~device:(Device.dev device) ~create_info () <?> "create_framebuffer" in
   Switch.on_release sw (fun () -> Device.wait_idle device; Vkc.destroy_framebuffer (Device.dev device) (Some fb) None);
   fb
+
+let transition_layout ~command_pool ~old_layout ~new_layout t =
+  Cmd.run_one_time command_pool @@ fun command_buffer ->
+  let subresource_range =
+    Vkt.Image_subresource_range.make
+      ~aspect_mask:Vkt.Image_aspect_flags.color
+      ~base_mip_level:0
+      ~level_count:1
+      ~base_array_layer:0
+      ~layer_count:1
+  in
+  let barrier = Vkt.Image_memory_barrier.make ()
+      ~image:t
+      ~old_layout
+      ~new_layout
+      ~src_queue_family_index:(Unsigned.UInt.to_int Vk.Const.queue_family_ignored)
+      ~dst_queue_family_index:(Unsigned.UInt.to_int Vk.Const.queue_family_ignored)
+      ~subresource_range
+  in
+  match old_layout, new_layout with
+  | Undefined, Transfer_dst_optimal ->
+    let barrier = barrier
+        ~src_access_mask:Vkt.Access_flags.empty
+        ~dst_access_mask:Vkt.Access_flags.transfer_write
+    in
+    Vkc.cmd_pipeline_barrier command_buffer
+      ~src_stage_mask:Vkt.Pipeline_stage_flags.top_of_pipe
+      ~dst_stage_mask:Vkt.Pipeline_stage_flags.transfer
+      ~image_memory_barriers:(Vkt.Image_memory_barrier.array [barrier]) ();
+  | Transfer_dst_optimal, Vkt.Image_layout.Shader_read_only_optimal ->
+    let barrier = barrier
+        ~src_access_mask:Vkt.Access_flags.transfer_write
+        ~dst_access_mask:Vkt.Access_flags.shader_read
+    in
+    Vkc.cmd_pipeline_barrier command_buffer
+      ~src_stage_mask:Vkt.Pipeline_stage_flags.transfer
+      ~dst_stage_mask:Vkt.Pipeline_stage_flags.fragment_shader
+      ~image_memory_barriers:(Vkt.Image_memory_barrier.array [barrier]) ();
+  | _ ->
+    invalid_arg "unsupported layout transition!"
+
+let copy_buffer ~command_pool ~width ~height t image =
+  Cmd.run_one_time command_pool @@ fun command_buffer ->
+  let image_subresource =
+    Vkt.Image_subresource_layers.make
+      ~aspect_mask:Vkt.Image_aspect_flags.color
+      ~mip_level:0
+      ~base_array_layer:0
+      ~layer_count:1
+  in
+  let regions =
+    Vkt.Buffer_image_copy.array [
+      Vkt.Buffer_image_copy.make
+        ~buffer_offset:Vkt.Device_size.zero
+        ~buffer_row_length:0
+        ~buffer_image_height:0
+        ~image_subresource
+        ~image_offset:(Vkt.Offset_3d.make ~x:0 ~y:0 ~z:0)
+        ~image_extent:(Vkt.Extent_3d.make ~width ~height ~depth:1)
+    ]
+  in
+  Vkc.cmd_copy_buffer_to_image command_buffer
+    ~src_buffer:t.Buffer.buffer
+    ~dst_image:image
+    ~dst_image_layout:Transfer_dst_optimal
+    ~regions

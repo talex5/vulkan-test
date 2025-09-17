@@ -20,6 +20,14 @@ module A = struct
     let t = cast new_elt t in
     assert (length t = 1);
     get t 0
+
+  let split (t : char t) len =
+    assert (len <= length t);
+    let a = from_ptr (start t) len in
+    let b = from_ptr Ctypes.(start t +@ len) (length t - len) in
+    Vk__helpers.keep_alive t a;
+    Vk__helpers.keep_alive t b;
+    a, b
 end
 
 let ( <?> ) x s = match x with

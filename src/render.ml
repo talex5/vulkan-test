@@ -24,8 +24,11 @@ let next_as_promise cond =
   ignore (Eio.Condition.register_immediate cond (Promise.resolve r) : Eio.Condition.request);
   p
 
-let create_framebuffer t =
-  Vulkan.Image.create_framebuffer ~device:t.device ~format:t.format ~render_pass:t.pipeline.render_pass
+let create_framebuffer ~sw t geometry image =
+  Vulkan.Image.create_framebuffer ~sw geometry image
+    ~device:t.device
+    ~format:t.format
+    ~render_pass:t.pipeline.render_pass
 
 let create_swapchain ~sw t geometry =
   Vulkan.Swap_chain.create ~sw ~dmabuf:t.window.wayland_dmabuf ~device:t.device ~format:t.format geometry
