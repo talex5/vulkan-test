@@ -5,12 +5,13 @@ type frame = {
   framebuffer : Vkt.Framebuffer.t;
   render_finished : Vkt.Semaphore.t;
   dma_buf_fd : Eio_unix.Fd.t;
+  geometry : int * int;
 }
 
-let create_image ~device ~extent format =
+let create_image ~device ~format (width, height) =
   Image.create device
     ~format
-    ~extent
+    ~extent:(Vkt.Extent_3d.make ~width ~height ~depth:1)
     ~usage:Vkt.Image_usage_flags.color_attachment
     ~sharing_mode:Exclusive
     ~initial_layout:Undefined
@@ -29,27 +30,24 @@ type t = {
   create_frame : unit -> frame;
 }
 
-let create ~sw ~dmabuf ~device ~format (width, height) create_framebuffer =
+let create ~sw ~dmabuf ~device ~format geometry create_framebuffer =
   let queue = Queue.create () in
   let create_frame () =
-    let extent = Vkt.Extent_3d.make ~width ~height ~depth:1 in
-    let image = create_image ~sw ~device ~extent format in
+    let image = create_image ~sw ~device ~format geometry in
     let memory = Image.allocate_image_memory ~sw ~device
         ~handle_types:Vkt.External_memory_handle_type_flags.opaque_fd image
         ~properties:Vkt.Memory_property_flags.device_local
     in
     let layout = Image.get_layout ~device image in
     let dma_buf_fd = Image.get_memory_fd ~sw device memory in
-    let framebuffer = create_framebuffer (width, height) image in
+    let framebuffer = create_framebuffer image in
     let render_finished = Semaphore.create_export ~sw device in
-    let frame wl_buffer = { framebuffer; wl_buffer; render_finished; dma_buf_fd } in
-    frame @@ Dmabuf.create_buffer ~sw dmabuf
+    let frame wl_buffer = { framebuffer; wl_buffer; render_finished; dma_buf_fd; geometry } in
+    frame @@ Dmabuf.create_buffer ~sw dmabuf geometry
       ~on_release:(fun wl_buffer -> Queue.add (frame wl_buffer) queue)
       ~fd:dma_buf_fd
       ~offset:(Vkt.Device_size.to_int (Vkt.Subresource_layout.offset layout) |> Int32.of_int)
       ~stride:(Vkt.Device_size.to_int (Vkt.Subresource_layout.row_pitch layout) |> Int32.of_int)
-      ~width:(Int32.of_int width)
-      ~height:(Int32.of_int height)
   in
   { queue; create_frame }
 

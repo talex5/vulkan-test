@@ -43,23 +43,25 @@ let render_pass format =
     ~subpasses:(Vkt.Subpass_description.array [subpass])
     ~dependencies:(Vkt.Subpass_dependency.array [dependency])
 
-(* Viewport and scissors (values are set dynamically later) *)
+let viewport ~width ~height =
+  Vkt.Viewport.make
+    ~x:0.0
+    ~y:0.0
+    ~width:(float width)
+    ~height:(float height)
+    ~min_depth:0.0
+    ~max_depth:1.0
+
+let rect ~x ~y ~width ~height =
+  let offset = Vkt.Offset_2d.make ~x ~y in
+  let extent = Vkt.Extent_2d.make ~width ~height in
+  Vkt.Rect_2d.make ~offset ~extent
+
+(* The real values are set dynamically later *)
 let dummy_viewport_state =
-  let viewport = Vkt.Viewport.make
-      ~x:0.0
-      ~y:0.0
-      ~width:0.0
-      ~height:0.0
-      ~min_depth:0.0
-      ~max_depth:1.0
-  in
-  let scissor = Vkt.Rect_2d.make
-      ~offset:(Vkt.Offset_2d.make ~x:0 ~y:0)
-      ~extent:(Vkt.Extent_2d.make ~width:0 ~height:0)
-  in
   Vkt.Pipeline_viewport_state_create_info.make ()
-    ~viewports:(Vkt.Viewport.array [viewport])
-    ~scissors:(Vkt.Rect_2d.array [scissor])
+    ~viewports:(Vkt.Viewport.array [viewport ~width:0 ~height:0])
+    ~scissors:(Vkt.Rect_2d.array [rect ~x:0 ~y:0 ~width:0 ~height:0])
 
 (* When the fragment shader outputs a pixel, it replaces whatever was already there in the framebuffer. *)
 let no_colour_blending =
@@ -135,26 +137,16 @@ let create ~sw ~format device =
   in
   { render_pass; graphics_pipeline}, inputs
 
-let record t input command_buffer (width, height) framebuffer =
-  let extent = Vkt.Extent_2d.make ~width ~height in
+let record t input cmd framebuffer =
+  let { Vulkan.Swap_chain.framebuffer; geometry = (width, height); _ } = framebuffer in
   let black = Vkt.Clear_color_value.float_32 (float_array [0.0; 0.0; 0.0; 1.0]) in
   let clear_values = Vkt.Clear_value.array [Vkt.Clear_value.color black] in
-  let offset = Vkt.Offset_2d.make ~x:0 ~y:0 in
-  let render_area = Vkt.Rect_2d.make ~offset ~extent in
-  let render_pass_info = Vkt.Render_pass_begin_info.make ~render_pass:t.render_pass ~framebuffer ~render_area ~clear_values () in
-  Vulkan.Cmd.render_pass command_buffer render_pass_info ~subpass_contents:Inline (fun () ->
-      Vulkan.Cmd.bind_pipeline command_buffer ~stage:Graphics t.graphics_pipeline;
-      let viewport = Vkt.Viewport.make
-          ~x:0.0
-          ~y:0.0
-          ~width:(float @@ Vkt.Extent_2d.width extent)
-          ~height:(float @@ Vkt.Extent_2d.height extent)
-          ~min_depth:0.0
-          ~max_depth:1.0
-      in
-      Vulkan.Cmd.set_viewport command_buffer ~first_viewport:0 [viewport];
-      let scissor = Vkt.Rect_2d.make ~offset ~extent in
-      Vulkan.Cmd.set_scissor command_buffer ~first_scissor:0 [scissor];
-      Input.bind input command_buffer;
-      Vulkan.Cmd.draw command_buffer ~vertex_count:3 ~instance_count:1 ~first_vertex:0 ~first_instance:0
+  let render_area = rect ~x:0 ~y:0 ~width ~height in
+  let info = Vkt.Render_pass_begin_info.make ~render_pass:t.render_pass ~framebuffer ~render_area ~clear_values () in
+  Vulkan.Cmd.render_pass cmd info ~subpass_contents:Inline (fun () ->
+      Vulkan.Cmd.bind_pipeline cmd ~stage:Graphics t.graphics_pipeline;
+      Vulkan.Cmd.set_viewport cmd ~first_viewport:0 [viewport ~width ~height];
+      Vulkan.Cmd.set_scissor cmd ~first_scissor:0 [render_area];
+      Input.bind input cmd;
+      Vulkan.Cmd.draw cmd ~vertex_count:3 ~instance_count:1 ~first_vertex:0 ~first_instance:0
     )

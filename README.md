@@ -2,7 +2,6 @@ Example OCaml code that uses GPU acceleration to render a triangle and display i
 using Vulkan but without its Wayland-support extension.
 
 This is intended for tracing, to help me learn about graphics.
-It is not good code to copy. For example, I generally don't bother freeing things.
 
 To run:
 

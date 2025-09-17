@@ -90,7 +90,9 @@ let get_surface_feedback linux_dmabuf surface =
   t
 
 (* Register a dmabuf with the Wayland compositor *)
-let create_buffer ~sw ~on_release ~offset ~stride ~width ~height ~fd t =
+let create_buffer ~sw ~on_release ~offset ~stride ~fd t (width, height) =
+  let width = Int32.of_int width in
+  let height = Int32.of_int height in
   let modifier = t.drm_format.modifier in
   let params = Zwp_linux_dmabuf_v1.create_params t.linux_dmabuf @@ object
       inherit [_] Zwp_linux_buffer_params_v1.v1
