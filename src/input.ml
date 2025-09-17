@@ -49,8 +49,10 @@ let create ~sw ~device =
   in
   pipeline_layout, (input 0, input 1)
 
-let set t cmd frame_number =
-  Ctypes.setf t.mapped Uniform_buffer_object.dist @@ Float.of_int ((frame_number land 0xff) - 100) /. 100.;
+let set t frame_number =
+  Ctypes.setf t.mapped Uniform_buffer_object.dist @@ Float.of_int ((frame_number land 0xff) - 100) /. 100.
+
+let bind t cmd =
   Vulkan.Cmd.bind_descriptor_sets cmd [t.descriptor_set]
     ~pipeline_bind_point:Graphics
     ~layout:t.pipeline_layout

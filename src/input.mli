@@ -11,5 +11,8 @@ val create :
   device:Vulkan.Device.t ->
   Vkt.Pipeline_layout.t * (t * t)
 
-val set : t -> Vkt.Command_buffer.t -> int -> unit
-(** [set t command_buffer frame] updates the memory for [frame] and binds it to the command buffer. *)
+val set : t -> int -> unit
+(** [set t frame] updates the memory for [frame]. *)
+
+val bind : t -> Vkt.Command_buffer.t -> unit
+(** [bind t command_buffer] binds [t] to the command buffer. *)
