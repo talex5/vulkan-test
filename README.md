@@ -1,4 +1,4 @@
-Example OCaml code that uses GPU acceleration to render a triangle and display it in a Wayland window,
+Example OCaml code that uses GPU acceleration to render 3D scene and display it in a Wayland window,
 using Vulkan but without its Wayland-support extension.
 
 This is intended for tracing, to help me learn about graphics.
@@ -9,10 +9,14 @@ To run:
 git clone https://github.com/talex5/vulkan-test.git
 cd vulkan-test
 nix develop
-dune exec ./src/main.exe 200
+make download-example
+dune exec -- ./src/main.exe 10000 viking_room.obj viking_room.png
 ```
 
-You should see a triangle sliding to the right.
-The `200` is the number of frames it will show before quitting.
+You should see an animation of a 3D viking room.
+The `10000` is the number of frames it will show before quitting.
 
-See the [Investigating Linux Graphics](https://roscidus.com/blog/blog/2025/06/24/graphics/) blog post for more information.
+For more information, see these blog posts:
+
+- [Investigating Linux Graphics](https://roscidus.com/blog/blog/2025/06/24/graphics/)
+- [Vulkan Graphics in OCaml vs C](https://roscidus.com/blog/blog/2025/09/20/ocaml-vulkan/)
