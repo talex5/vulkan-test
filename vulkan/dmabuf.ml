@@ -16,8 +16,8 @@ module Dmabuf_feedback_format_table = struct
 
   let get t i =
     let off = i * sizeof_entry in
-    Drm.Format.v (Cstruct.HE.get_uint32 t off)
-      ~modifier:(Cstruct.HE.get_uint64 t (off + 8))
+    Drm_format.v (Drm.Fourcc.of_int32 (Cstruct.HE.get_uint32 t off))
+      ~modifier:(Drm.Modifier.of_int64 (Cstruct.HE.get_uint64 t (off + 8)))
 end
 
 module Wayland_array16 = struct
@@ -33,7 +33,7 @@ end
 
 type t = {
   linux_dmabuf : [`V4] Zwp_linux_dmabuf_v1.t;
-  drm_format : Drm.Format.t;
+  drm_format : Drm_format.t;
   main_device : Drm.Dev_t.t;
 }
 
@@ -65,10 +65,10 @@ let get_surface_feedback linux_dmabuf surface =
       method on_tranche_formats _ ~indices =
         indices |> Wayland_array16.iter (fun index ->
             let item = Dmabuf_feedback_format_table.get table index in
-            Log.debug (fun f -> f "feedback_tranche_formats: %a" Drm.Format.pp item);
+            Log.debug (fun f -> f "feedback_tranche_formats: %a" Drm_format.pp item);
             (* My card doesn't support modifiers, so use the DRM_FORMAT_RESERVED fallback *)
-            if item.code = Drm.Format.Code.xr24 && item.modifier = Drm.Format.Mod.reserved then (
-              Log.info (fun f -> f "Found supported format %a" Drm.Format.pp item);
+            if item.code = Drm.Fourcc.xr24 && item.modifier = Drm.Modifier.reserved then (
+              Log.info (fun f -> f "Found supported format %a" Drm_format.pp item);
               drm_format := Some item
             )
           )
@@ -93,7 +93,7 @@ let get_surface_feedback linux_dmabuf surface =
 let create_buffer ~sw ~on_release ~offset ~stride ~fd t (width, height) =
   let width = Int32.of_int width in
   let height = Int32.of_int height in
-  let modifier = t.drm_format.modifier in
+  let modifier = (t.drm_format.modifier :> int64) in
   let params = Zwp_linux_dmabuf_v1.create_params t.linux_dmabuf @@ object
       inherit [_] Zwp_linux_buffer_params_v1.v1
       method on_created _ = assert false        (* Not used for immediate creation *)
@@ -110,7 +110,7 @@ let create_buffer ~sw ~on_release ~offset ~stride ~fd t (width, height) =
     ~stride
     ~modifier_hi:(Int64.shift_right_logical modifier 32 |> Int64.to_int32)
     ~modifier_lo:(Int64.to_int32 modifier);
-  let buffer = Zwp_linux_buffer_params_v1.create_immed params ~width ~height ~format:t.drm_format.code ~flags:0l @@ object
+  let buffer = Zwp_linux_buffer_params_v1.create_immed params ~width ~height ~format:(t.drm_format.code :> int32) ~flags:0l @@ object
       inherit [_] Wl_buffer.v1
       method on_release = on_release
     end

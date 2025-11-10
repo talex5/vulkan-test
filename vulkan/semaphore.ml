@@ -18,7 +18,7 @@ let create_export = create ~handle_types:Vkt.External_semaphore_handle_type_flag
 
 let import device fd semaphore =
   Eio_unix.Fd.use_exn "Semaphore.import" fd @@ fun fd ->
-  let fd = Drm.export_sync_file fd `RW in
+  let fd = Drm.Dmabuf.export_sync_file fd `RW in
   let module E = (val device.Device.ext) in
   E.import_semaphore_fd_khr @@
   Vkt.Import_semaphore_fd_info_khr.make ()
@@ -35,4 +35,4 @@ let export device semaphore fd =
   let module E = (val device.Device.ext) in
   let sync_file_fd = unix_of_int (E.get_semaphore_fd_khr get_fd_info) in
   Fun.protect ~finally:(fun () -> Unix.close sync_file_fd) @@ fun () ->
-  Eio_unix.Fd.use_exn "import_sync_file" fd (fun fd -> Drm.import_sync_file fd ~sync_file_fd `RW)
+  Eio_unix.Fd.use_exn "import_sync_file" fd (fun fd -> Drm.Dmabuf.import_sync_file fd ~sync_file_fd `RW)

@@ -39,13 +39,34 @@
         "type": "github"
       }
     },
+    "libdrm-ocaml": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1762716643,
+        "narHash": "sha256-+tC1YO5Vq+34h2oG+Je/l2voIAubfl0P/wB+oecEniU=",
+        "owner": "talex5",
+        "repo": "libdrm-ocaml",
+        "rev": "1fcf677f9423045a67be444bcd2b923841be7686",
+        "type": "github"
+      },
+      "original": {
+        "owner": "talex5",
+        "ref": "main",
+        "repo": "libdrm-ocaml",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1756999638,
-        "narHash": "sha256-R9wNXA8KT71zo/GeMdVgB3KoHj11h4eHa7woTLXMQVw=",
+        "lastModified": 1762765860,
+        "narHash": "sha256-eC9lOOs9XIbyXStB1DZ+9CNNNsLRmCktrIRCBlxuMWo=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "e7b7aee12245de9127b3af86ae049cccd490d7cb",
+        "rev": "37a52ecc83b26df6447531b1629d2f49b6107834",
         "type": "github"
       },
       "original": {
@@ -58,6 +79,7 @@
     "root": {
       "inputs": {
         "eio-trace": "eio-trace",
+        "libdrm-ocaml": "libdrm-ocaml",
         "nixpkgs": "nixpkgs"
       }
     },

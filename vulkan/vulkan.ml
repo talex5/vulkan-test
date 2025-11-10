@@ -13,9 +13,10 @@ module Image = Image
 module Binding = Binding
 module Descriptor_set = Descriptor_set
 module Swap_chain = Swap_chain
+module Drm_format = Drm_format
 
 module Format = struct
-  let of_drm (drm_format : Drm.Format.t) =
-    if drm_format.code = Drm.Format.Code.xr24 then Vkt.Format.B8g8r8a8_srgb
-    else Fmt.failwith "Unknown DRM format %a" Drm.Format.pp drm_format
+  let of_drm (drm_format : Drm_format.t) =
+    if drm_format.code = Drm.Fourcc.xr24 then Vkt.Format.B8g8r8a8_srgb
+    else Fmt.failwith "Unknown DRM format %a" Drm_format.pp drm_format
 end

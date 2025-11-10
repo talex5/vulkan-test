@@ -28,8 +28,8 @@ let create ?flags ?(validation_layers=[]) ?(extensions=[]) ~sw application_info 
   Switch.on_release sw (fun () -> Vkc.destroy_instance (Some t) None);
   t
 
-let render dev = Dev_t.make Vkt.Physical_device_drm_properties_ext.(render_major dev, render_minor dev)
-let primary dev = Dev_t.make Vkt.Physical_device_drm_properties_ext.(primary_major dev, primary_minor dev)
+let render dev = Dev_t.v Vkt.Physical_device_drm_properties_ext.(render_major dev, render_minor dev)
+let primary dev = Dev_t.v Vkt.Physical_device_drm_properties_ext.(primary_major dev, primary_minor dev)
 
 let get_physical_device_properties x =
   let module P = Vkt.Physical_device_properties in
