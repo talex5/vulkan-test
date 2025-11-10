@@ -1,0 +1,3 @@
+(library
+ (name vulkan)
+ (libraries fmt olivine eio drm wayland wayland.protocols))

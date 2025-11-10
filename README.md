@@ -1,6 +1,7 @@
-Example code that uses GPU acceleration to render a triangle and display it in a Wayland window, using Vulkan but without its Wayland-support extension.
+Example OCaml code that uses GPU acceleration to render a triangle and display it in a Wayland window,
+using Vulkan but without its Wayland-support extension.
 
-This is intended for tracing, to help me learn about graphics. It is not good code to copy. For example, I generally don't bother freeing things.
+This is intended for tracing, to help me learn about graphics.
 
 To run:
 
@@ -8,7 +9,7 @@ To run:
 git clone https://github.com/talex5/vulkan-test.git
 cd vulkan-test
 nix develop
-make && ./vulkan-test 200
+dune exec ./src/main.exe 200
 ```
 
 You should see a triangle sliding to the right.

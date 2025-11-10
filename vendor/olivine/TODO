@@ -1,0 +1,38 @@
+
+* Improve generated code readability, check current github PR
+
+* Better recognition of out parameters
+
+* Recognize primitive implementation of sum types in function inputs
+
+* Liveness analysis: make sure that the GC don't collect values that live
+on the C side
+
+* Expose record setter
+
+Done:
+
+* Variable-length output array:
+  Extract correctly the tuple index, array from the function definition
+
+* Structure_type handling:
+  The (s_type, p_next) vulkan idiom should be mapped to
+  `Stype(p_next) and made optional in smart record constructor when there is
+  only one possible `Stype. The possible values need to be extracted from the vulkan
+  spec.
+
+* Path field array index:
+  Output Array lenght are sometimes defined in term of input.fields_path
+
+* Be more cautious when identifying out parameters
+
+* Remove useless prefix in name
+  e.g. p_, s_, pp_
+
+* Formatter for record types
+
+* Handle shared size between array input
+
+* Handle constant-size arrays
+
+* Constructor for union type

@@ -1,0 +1,7 @@
+_build/*
+*~
+spec/vulkan.h
+olivine.install
+*.spv
+.*
+tmp/*

@@ -1,0 +1,4 @@
+(test
+  (name test)
+  ;(modes byte exe)
+  (libraries olivine info aster alcotest))
