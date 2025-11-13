@@ -5,7 +5,7 @@ type t = {
   device : Vulkan.Device.t;
   format : Vkt.Format.t;
   pipeline : Pipeline.t;
-  window : Window.t;
+  surface : Surface.t;
   redraw_needed : Eio.Condition.t;
   mutable frame : int;
 }
@@ -30,7 +30,7 @@ let create_depth_buffer ~sw t (width, height) =
   Vulkan.Image.create_view ~sw ~format ~device img
     ~aspect_mask:Vkt.Image_aspect_flags.depth
 
-let record_commands t job (framebuffer : Vulkan.Swap_chain.frame) =
+let record_commands t job (framebuffer : _ Vulkan.Swap_chain.frame) =
   let { Duo.input; command_buffer } = job in
   Input.set input t.frame ~geometry:framebuffer.geometry;
   Vulkan.Cmd.reset command_buffer;
@@ -53,21 +53,23 @@ let create_framebuffer ~sw ~depth_buffer t geometry image =
 
 let create_swapchain ~sw t geometry =
   let depth_buffer = create_depth_buffer ~sw t geometry in
-  Vulkan.Swap_chain.create ~sw ~dmabuf:t.window.wayland_dmabuf ~device:t.device ~format:t.format geometry
-    (create_framebuffer ~sw ~depth_buffer t geometry)
+  Vulkan.Swap_chain.create ~sw geometry (create_framebuffer ~sw ~depth_buffer t geometry)
+    ~device:t.device
+    ~format:t.format
+    ~import:t.surface#import_buffer
 
 let render_loop t duo =
   while true do
-    let geometry = Window.geometry t.window in
+    let geometry = t.surface#geometry in
     Switch.run @@ fun sw ->
     let framebuffers = create_swapchain ~sw t geometry in
-    while geometry = Window.geometry t.window do
+    while geometry = t.surface#geometry do
       let fb = Vulkan.Swap_chain.get_framebuffer framebuffers in
       let redraw_needed = next_as_promise t.redraw_needed in
       let job = Duo.get duo in
       record_commands t job fb;
       Duo.submit duo fb job.command_buffer;
-      Window.attach t.window ~buffer:fb.wl_buffer;
+      fb.buffer#attach;
       Promise.await redraw_needed
     done
   done
@@ -75,12 +77,12 @@ let render_loop t duo =
 let trigger_redraw t =
   Eio.Condition.broadcast t.redraw_needed
 
-let create ~sw ~device ~window model =
+let create ~sw ~device ~surface model =
   let format = Vkt.Format.B8g8r8a8_srgb in
   let pipeline, inputs = Pipeline.create ~sw ~format ~device model in
   let command_pool = Vulkan.Cmd.create_pool ~sw device in
   let duo = Duo.make ~sw ~command_pool ~device inputs in
   let redraw_needed = Eio.Condition.create () in
-  let t = { device; format; window; pipeline; redraw_needed; frame = 0 } in
+  let t = { device; format; surface; pipeline; redraw_needed; frame = 0 } in
   Fiber.fork_daemon ~sw (fun () -> render_loop t duo);
   t

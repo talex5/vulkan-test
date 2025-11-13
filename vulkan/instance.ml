@@ -47,7 +47,6 @@ let get_physical_device_properties x =
   P.device_name (P2.properties props2), drm_props
 
 let find_device instance wayland_device =
-  Log.info (fun f -> f "Wayland compositor main device is %a" Dev_t.pp wayland_device);
   let physical_devices = Vkc.enumerate_physical_devices ~instance <?> "physical device" in
   Log.info (fun f -> f "Vulkan found %d physical devices" (A.length physical_devices));
   let found = ref None in
@@ -59,7 +58,7 @@ let find_device instance wayland_device =
       else if primary drm_props = wayland_device then found := Some (i, "primary")
     );
   match !found with
-  | None -> failwith "Wayland GPU device not found"
+  | None -> failwith "GPU device not found"
   | Some (i, x) ->
-    Log.debug (fun f -> f "Using device %d (matches Wayland %s node)" i x);
+    Log.debug (fun f -> f "Using device %d (matches requested %s node)" i x);
     A.get physical_devices i

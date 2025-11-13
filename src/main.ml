@@ -5,20 +5,26 @@ let validation_layers = if validation then ["VK_LAYER_KHRONOS_validation"] else 
 
 let app_info = Vulkan.Instance.application_info "vulkan-test-ocaml" ~version:(1,0,0)
 
-let main ~net ~frame_limit model =
-  Switch.run @@ fun sw ->
-  let instance = Vulkan.Instance.create ~sw ~validation_layers app_info in
-  let transport = Wayland.Unix_transport.connect ~sw ~net () in
-  let window = Window.init ~sw transport in
-  let physical_device = Vulkan.Instance.find_device instance window.wayland_dmabuf.main_device in
+let animate ~sw ~frame_limit ~instance ~device ~model surface =
+  let physical_device = Vulkan.Instance.find_device instance device in
   let device = Vulkan.Device.create ~sw physical_device in
-  let render = Render.create ~sw ~device ~window model in
+  let render = Render.create ~sw ~device ~surface model in
   while render.frame < frame_limit do
-    let next_frame_due = Window.frame window in
+    let next_frame_due = surface#frame in
     Render.trigger_redraw render;
     Promise.await next_frame_due;
     render.frame <- render.frame + 1
-  done;
+  done
+
+let main ~net ~frame_limit model =
+  Switch.run @@ fun sw ->
+  let instance = Vulkan.Instance.create ~sw ~validation_layers app_info in
+  let animate = animate ~sw ~frame_limit ~model ~instance in
+  let transport = Wayland.Unix_transport.connect ~sw ~net () in
+  let window = Window.init ~sw transport in
+  let device = window.wayland_dmabuf.main_device in
+  Log.info (fun f -> f "Wayland compositor main device is %a" Drm.Dev_t.pp device);
+  animate ~device (Window.surface window);
   Window.destroy window
 
 let () =

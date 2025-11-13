@@ -43,7 +43,7 @@ let get t =
 
 (* Note: Mesa's WSI also calls set_memory_ownership when acquiring and presenting images.
    I'm not sure what that's for (it doesn't do anything on my GPU) so I skipped it. *)
-let submit t (fb : Vulkan.Swap_chain.frame) command_buffer =
+let submit t (fb : _ Vulkan.Swap_chain.frame) command_buffer =
   let device = t.device in
   (* If we're still rendering the last frame, wait for that to finish.
      Needed because e.g. [image_available_semaphore] isn't per-framebuffer. *)

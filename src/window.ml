@@ -86,3 +86,17 @@ let frame t =
 let geometry t = !(t.geometry)
 
 let destroy t = Wayland.Client.stop t.display
+
+let surface t =
+  object (_ : Surface.t)
+    method geometry = geometry t
+    method frame = frame t
+
+    method import_buffer ~sw ~on_release { geometry; offset; stride; fd } =
+      let buffer =
+        Vulkan.Dmabuf.create_buffer t.wayland_dmabuf ~sw ~on_release ~fd geometry
+          ~offset:(Int32.of_int offset)
+          ~stride:(Int32.of_int stride)
+      in
+      object method attach = attach t ~buffer end
+  end

@@ -1,7 +1,7 @@
 open Common
 
-type frame = {
-  wl_buffer : Dmabuf.buffer;
+type 'a frame = {
+  buffer : 'a;
   framebuffer : Vkt.Framebuffer.t;
   render_finished : Vkt.Semaphore.t;
   dma_buf_fd : Eio_unix.Fd.t;
@@ -25,12 +25,19 @@ let create_image ~device ~format (width, height) =
        vkGetPhysicalDeviceImageFormatProperties2 always returns VK_ERROR_FORMAT_NOT_SUPPORTED. *)
     ~handle_types:Vkt.External_memory_handle_type_flags.opaque_fd
 
-type t = {
-  queue : frame Queue.t;
-  create_frame : unit -> frame;
+type 'a t = {
+  queue : 'a frame Queue.t;
+  create_frame : unit -> 'a frame;
 }
 
-let create ~sw ~dmabuf ~device ~format geometry create_framebuffer =
+type dmabuf = {
+  geometry : int * int;
+  offset : int;
+  stride : int;
+  fd : Eio_unix.Fd.t;
+}
+
+let create ~sw ~device ~format ~import geometry create_framebuffer =
   let queue = Queue.create () in
   let create_frame () =
     let image = create_image ~sw ~device ~format geometry in
@@ -39,15 +46,18 @@ let create ~sw ~dmabuf ~device ~format geometry create_framebuffer =
         ~properties:Vkt.Memory_property_flags.device_local
     in
     let layout = Image.get_layout ~device image in
-    let dma_buf_fd = Image.get_memory_fd ~sw device memory in
     let framebuffer = create_framebuffer image in
     let render_finished = Semaphore.create_export ~sw device in
-    let frame wl_buffer = { framebuffer; wl_buffer; render_finished; dma_buf_fd; geometry } in
-    frame @@ Dmabuf.create_buffer ~sw dmabuf geometry
-      ~on_release:(fun wl_buffer -> Queue.add (frame wl_buffer) queue)
-      ~fd:dma_buf_fd
-      ~offset:(Vkt.Device_size.to_int (Vkt.Subresource_layout.offset layout) |> Int32.of_int)
-      ~stride:(Vkt.Device_size.to_int (Vkt.Subresource_layout.row_pitch layout) |> Int32.of_int)
+    let dmabuf = {
+      geometry;
+      offset = Vkt.Device_size.to_int (Vkt.Subresource_layout.offset layout);
+      stride = Vkt.Device_size.to_int (Vkt.Subresource_layout.row_pitch layout);
+      fd = Image.get_memory_fd ~sw device memory;
+    } in
+    let rec buffer = lazy (import ~sw ~on_release dmabuf)
+    and on_release () = Queue.add (Lazy.force frame) queue
+    and frame = lazy { framebuffer; buffer = Lazy.force buffer; render_finished; dma_buf_fd = dmabuf.fd; geometry } in
+    Lazy.force frame
   in
   { queue; create_frame }
 
