@@ -20,12 +20,20 @@ let main ~net ~frame_limit model =
   Switch.run @@ fun sw ->
   let instance = Vulkan.Instance.create ~sw ~validation_layers app_info in
   let animate = animate ~sw ~frame_limit ~model ~instance in
-  let transport = Wayland.Unix_transport.connect ~sw ~net () in
-  let window = Window.init ~sw transport in
-  let device = window.wayland_dmabuf.main_device in
-  Log.info (fun f -> f "Wayland compositor main device is %a" Drm.Dev_t.pp device);
-  animate ~device (Window.surface window);
-  Window.destroy window
+  if Sys.getenv_opt "WAYLAND_DISPLAY" <> None then (
+    let transport = Wayland.Unix_transport.connect ~sw ~net () in
+    let window = Window.init ~sw transport in
+    let device = window.wayland_dmabuf.main_device in
+    Log.info (fun f -> f "Wayland compositor main device is %a" Drm.Dev_t.pp device);
+    animate ~device (Window.surface window);
+    Window.destroy window
+  ) else (
+    Ctrl_c.install_signal_handler sw;
+    let vt = Vt.init ~sw () in
+    let device = Vt.device vt in
+    Log.info (fun f -> f "Selected GPU device is %a" Drm.Dev_t.pp device);
+    animate ~device (Vt.surface vt)
+  )
 
 let () =
   (* The cache spawns two threads and makes traces more confusing, so disable it. *)
