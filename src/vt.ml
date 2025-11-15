@@ -155,8 +155,12 @@ let frame t =
 
 let surface t =
   object (_ : Surface.t)
+    method format = B8g8r8a8_srgb
     method geometry = geometry t
     method frame = frame t
+
+    method create_image ~sw ~device geometry =
+      Surface.create_image ~sw ~device ~format:B8g8r8a8_srgb geometry
 
     method import_buffer ~sw ~on_release dmabuf =
       let buffer = import ~sw ~on_release t dmabuf in

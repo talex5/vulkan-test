@@ -185,7 +185,7 @@ let create ~sw ~format ~device (obj, texture_png) =
   { render_pass; graphics_pipeline; vertex_buffer }, inputs
 
 let record t input cmd framebuffer =
-  let { Vulkan.Swap_chain.framebuffer; geometry = (width, height); _ } = framebuffer in
+  let { Surface.framebuffer; geometry = (width, height); _ } = framebuffer in
   let black = Vkt.Clear_color_value.float_32 (float_array [0.0; 0.0; 0.0; 1.0]) in
   let far = Vkt.Clear_depth_stencil_value.make ~depth:1.0 ~stencil:0 in
   let clear_values = Vkt.Clear_value.array [

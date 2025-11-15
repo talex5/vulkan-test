@@ -89,8 +89,12 @@ let destroy t = Wayland.Client.stop t.display
 
 let surface t =
   object (_ : Surface.t)
+    method format = B8g8r8a8_srgb
     method geometry = geometry t
     method frame = frame t
+
+    method create_image ~sw ~device geometry =
+      Surface.create_image ~sw ~device ~format:B8g8r8a8_srgb geometry
 
     method import_buffer ~sw ~on_release { geometry; offset; stride; fd } =
       let buffer =
