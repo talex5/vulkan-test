@@ -1,10 +1,14 @@
 {
-  description = "Testing opengl";
+  description = "Testing Vulkan";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/release-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/release-25.11";
     libdrm-ocaml = {
       url = "github:talex5/libdrm-ocaml/main";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    olivine = {
+      url = "github:talex5/olivine/fix-record-ext";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     eio-trace = {
@@ -13,13 +17,14 @@
     };
   };
 
-  outputs = { self, nixpkgs, eio-trace, libdrm-ocaml }:
+  outputs = { self, nixpkgs, eio-trace, olivine, libdrm-ocaml }:
   let
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
   in {
     packages.${system}.default = pkgs.callPackage (import ./default.nix) {
       libdrm-ocaml = libdrm-ocaml.packages.${system}.default;
+      olivine = olivine.packages.${system}.default;
     };
 
     devShells.${system}.default = pkgs.mkShell {

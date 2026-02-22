@@ -1,1 +1,0 @@
-let supported_systems = []
