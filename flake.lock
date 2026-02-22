@@ -46,11 +46,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1762716643,
-        "narHash": "sha256-+tC1YO5Vq+34h2oG+Je/l2voIAubfl0P/wB+oecEniU=",
+        "lastModified": 1763309706,
+        "narHash": "sha256-Q9EMk3L8abXdz//RZwetIe9qc/LFRejMnZUNR0QrAOc=",
         "owner": "talex5",
         "repo": "libdrm-ocaml",
-        "rev": "1fcf677f9423045a67be444bcd2b923841be7686",
+        "rev": "1245a15af77fd595d66ac0dd16b672db097877c1",
         "type": "github"
       },
       "original": {
@@ -62,17 +62,38 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1762765860,
-        "narHash": "sha256-eC9lOOs9XIbyXStB1DZ+9CNNNsLRmCktrIRCBlxuMWo=",
+        "lastModified": 1772907012,
+        "narHash": "sha256-RaURINw5Bt39/be0DouuVD4g2RUx7BYJHonX8UWx3nw=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "37a52ecc83b26df6447531b1629d2f49b6107834",
+        "rev": "72d811454c106021f8475437057643e3e3f70bf1",
         "type": "github"
       },
       "original": {
         "owner": "NixOS",
-        "ref": "release-25.05",
+        "ref": "release-25.11",
         "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "olivine": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1771769785,
+        "narHash": "sha256-37frn9Bdt2u5LgMePejaPhwI9gz+oCL31lrKlin7PP0=",
+        "owner": "talex5",
+        "repo": "olivine",
+        "rev": "19e543d5f520a044c3b0e714112f025825b6195c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "talex5",
+        "ref": "fix-record-ext",
+        "repo": "olivine",
         "type": "github"
       }
     },
@@ -80,7 +101,8 @@
       "inputs": {
         "eio-trace": "eio-trace",
         "libdrm-ocaml": "libdrm-ocaml",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "olivine": "olivine"
       }
     },
     "systems": {

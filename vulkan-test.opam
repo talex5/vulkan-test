@@ -1,0 +1,28 @@
+opam-version: "2.0"
+synopsis: "Vulkan test"
+authors: ["talex5@gmail.com"]
+homepage: "https://github.com/talex5/vulkan-test"
+depends: [
+  "dune" {>= "3.16"}
+  "ocaml" {>= "5.4"}
+  "olivine"
+  "ppx_blob"
+  "eio_main"
+  "wayland"
+  "cairo2"
+  "libdrm"
+  "logs"
+]
+build: [
+  ["dune" "subst"] {dev}
+  ["dune" "build"
+    "-p" name
+    "-j" jobs
+    "@install"
+    "@runtest" {with-test}
+    "@doc" {with-doc}
+  ]
+]
+pin-depends: [
+  ["olivine.dev" "git+https://github.com/talex5/olivine.git#59b3f56cee831905db21039f11991a5c36226d4d"]
+]
