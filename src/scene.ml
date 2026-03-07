@@ -3,12 +3,11 @@ module A = Vulkan.A
 
 let float_array = A.of_list Ctypes.float        (* Doesn't require GC protection *)
 
-let shader_code = [%blob "./slang.spv"]
-
 type t = {
   render_pass : Vkt.Render_pass.t;
-  graphics_pipeline : Vkt.Pipeline.t;
-  vertex_buffer : Vertices.t;
+  ubo : Ubo.t Double.t;
+  room : (Vkt.Command_buffer.t -> unit) Double.t;
+  mutable frame : int;
 }
 
 (* The render needs a colour image, which it clears and then writes to. *)
@@ -60,75 +59,17 @@ let rect ~x ~y ~width ~height =
   let extent = Vkt.Extent_2d.make ~width ~height in
   Vkt.Rect_2d.make ~offset ~extent
 
-let no_stencil_op = Vkt.Stencil_op_state.make
-    ~fail_op:Vkt.Stencil_op.Zero
-    ~pass_op:Vkt.Stencil_op.Zero
-    ~depth_fail_op:Vkt.Stencil_op.Zero
-    ~compare_op:Vkt.Compare_op.Never
-    ~compare_mask:0
-    ~write_mask:0
-    ~reference:0
-
-let depth_testing = Vkt.Pipeline_depth_stencil_state_create_info.make ()
-    ~depth_test_enable:true
-    ~depth_write_enable:true
-    ~depth_compare_op:Less
-    ~depth_bounds_test_enable:false
-    ~stencil_test_enable:false
-    ~front:no_stencil_op
-    ~back:no_stencil_op
-    ~min_depth_bounds:0.0
-    ~max_depth_bounds:0.0
-
-let triangle_list = Vkt.Pipeline_input_assembly_state_create_info.make ()
-    ~topology:Triangle_list
-    ~primitive_restart_enable:false
-
-let vertices = Vkt.Pipeline_vertex_input_state_create_info.make ()
-    ~vertex_binding_descriptions:(Vkt.Vertex_input_binding_description.(array [
-        make ~binding:0 ~stride:(Ctypes.sizeof Vertex.ctype) ~input_rate:Vertex;
-      ]))
-    ~vertex_attribute_descriptions:Vertex.attr_desc
-
-let create ~sw ~format ~device (obj, texture_png) =
-  let rasterizer = Vkt.Pipeline_rasterization_state_create_info.make ()
-      ~depth_clamp_enable:false
-      ~rasterizer_discard_enable:false
-      ~polygon_mode:Fill
-      ~line_width:1.0
-      ~cull_mode:Vkt.Cull_mode_flags.back
-      ~front_face:Clockwise
-      ~depth_bias_enable:false
-      ~depth_bias_constant_factor:0.0
-      ~depth_bias_clamp:0.0
-      ~depth_bias_slope_factor:0.0
-  in
-  let vertex_buffer = Vertices.allocate ~sw ~device obj in
+let create ~sw ~format ~device model =
+  let ubo = Double.init (fun (_ : Double.side) -> Ubo.create ~sw ~device) in
   let render_pass = Vulkan.Device.create_render_pass ~sw device (render_pass format) in
-  let command_pool = Vulkan.Cmd.create_pool ~sw device in
-  let texture =
-    let img = Texture.create ~sw ~command_pool ~device texture_png in
-    Vulkan.Image.create_view ~sw ~format ~device ~aspect_mask:Vkt.Image_aspect_flags.color img
-  in
-  let layout, inputs = Input.create ~sw ~device ~texture in
-  let graphics_pipeline =
-    let shader = Vulkan.Shader.load ~sw device shader_code in
-    Vulkan.Pipeline.make ~sw ~device ~render_pass ()
-      ~vertex_input_state:vertices
-      ~stages:(Vkt.Pipeline_shader_stage_create_info.array [
-          shader "vertMain" Vkt.Shader_stage_flags.vertex;
-          shader "fragMain" Vkt.Shader_stage_flags.fragment;
-        ])
-      ~topology:Triangle_list
-      ~primitive_restart_enable:true
-      ~rasterizer
-      ~layout
-      ~depth_stencil_state:depth_testing
-  in
-  { render_pass; graphics_pipeline; vertex_buffer }, inputs
+  let room = Room.create ~sw ~device ~ubo ~render_pass model in
+  { render_pass; ubo; room; frame = 0 }
 
-let record t input cmd framebuffer =
-  let { Surface.framebuffer; geometry = (width, height); _ } = framebuffer in
+let record t cmd framebuffer side =
+  let { Surface.framebuffer; geometry; _ } = framebuffer in
+  let draw_room = Double.get t.room side in
+  Ubo.set (Double.get t.ubo side) t.frame ~geometry;
+  let (width, height) = geometry in
   let black = Vkt.Clear_color_value.float_32 (float_array [0.0; 0.0; 0.0; 1.0]) in
   let far = Vkt.Clear_depth_stencil_value.make ~depth:1.0 ~stencil:0 in
   let clear_values = Vkt.Clear_value.array [
@@ -138,9 +79,7 @@ let record t input cmd framebuffer =
   let render_area = rect ~x:0 ~y:0 ~width ~height in
   let info = Vkt.Render_pass_begin_info.make ~render_pass:t.render_pass ~framebuffer ~render_area ~clear_values () in
   Vulkan.Cmd.render_pass cmd info ~subpass_contents:Inline (fun () ->
-      Vulkan.Cmd.bind_pipeline cmd ~stage:Graphics t.graphics_pipeline;
       Vulkan.Cmd.set_viewport cmd ~first_viewport:0 [viewport ~width ~height];
       Vulkan.Cmd.set_scissor cmd ~first_scissor:0 [render_area];
-      Input.bind input cmd;
-      Vertices.record t.vertex_buffer cmd;
+      draw_room cmd;
     )

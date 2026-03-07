@@ -3,43 +3,32 @@
 module Vkt = Vk.Types
 
 type job = {
-  input : Input.t;
+  side : Double.side;
   command_buffer : Vkt.Command_buffer.t;
 }
-
-type side = A | B
-
-let invert = function
-  | A -> B
-  | B -> A
 
 type t = {
   device : Vulkan.Device.t;
   in_flight_fence : Vkt.Fence.t;                (* Signalled when GPU finishes rendering pipeline *)
   image_available : Vkt.Semaphore.t;            (* Signalled when the compositer has finished showing the old image *)
-  a : job;
-  b : job;
-  mutable cpu_owns : side;     (* Which job we last gave to the CPU *)
+  jobs : job Double.t;
+  mutable cpu_owns : Double.side;     (* Which job we last gave to the CPU *)
 }
 
-let make ~sw ~command_pool ~device (ia, ib) =
-  let job input =
+let make ~sw ~command_pool ~device =
+  let job side =
     let command_buffer = Vulkan.Cmd.allocate_buffer ~sw command_pool in
-    { command_buffer; input }
+    { side; command_buffer }
   in
   {
     device;
     in_flight_fence = Vulkan.Fence.create ~sw device Vkt.Fence_create_flags.signaled;
     image_available = Vulkan.Semaphore.create ~sw device;
-    a = job ia;
-    b = job ib;
+    jobs = Double.init job;
     cpu_owns = A;
   }
 
-let get t =
-  match t.cpu_owns with
-  | A -> t.a
-  | B -> t.b
+let get t = Double.get t.jobs t.cpu_owns
 
 (* Note: Mesa's WSI also calls set_memory_ownership when acquiring and presenting images.
    I'm not sure what that's for (it doesn't do anything on my GPU) so I skipped it. *)
@@ -54,7 +43,7 @@ let submit t (fb : Surface.framebuffer) command_buffer =
      which trigged inFlightFence. *)
 
   (* The CPU and GPU are now both idle, and ownership of the jobs switches here. *)
-  t.cpu_owns <- invert t.cpu_owns;
+  t.cpu_owns <- Double.invert t.cpu_owns;
 
   (* Get the semaphore that the compositor's render job will signal when
      it's done reading the image: *)

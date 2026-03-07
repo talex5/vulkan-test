@@ -6,7 +6,6 @@ type t = {
   scene : Scene.t;
   surface : Surface.t;
   redraw_needed : Eio.Condition.t;
-  mutable frame : int;
 }
 
 let create_depth_buffer ~sw t (width, height) =
@@ -30,11 +29,10 @@ let create_depth_buffer ~sw t (width, height) =
     ~aspect_mask:Vkt.Image_aspect_flags.depth
 
 let record_commands t job (framebuffer : Surface.framebuffer) =
-  let { Duo.input; command_buffer } = job in
-  Input.set input t.frame ~geometry:framebuffer.geometry;
+  let { Duo.side; command_buffer } = job in
   Vulkan.Cmd.reset command_buffer;
   Vulkan.Cmd.record command_buffer (fun () ->
-      Scene.record t.scene input command_buffer framebuffer
+      Scene.record t.scene command_buffer framebuffer side
     )
 
 (* Should probably get this added to [Eio.Condition]. *)
@@ -93,10 +91,10 @@ let trigger_redraw t =
   Eio.Condition.broadcast t.redraw_needed
 
 let create ~sw ~device ~surface model =
-  let scene, inputs = Scene.create ~sw ~format:surface#format ~device model in
+  let scene = Scene.create ~sw ~format:surface#format ~device model in
   let command_pool = Vulkan.Cmd.create_pool ~sw device in
-  let duo = Duo.make ~sw ~command_pool ~device inputs in
+  let duo = Duo.make ~sw ~command_pool ~device in
   let redraw_needed = Eio.Condition.create () in
-  let t = { device; surface; scene; redraw_needed; frame = 0 } in
+  let t = { device; surface; scene; redraw_needed } in
   Fiber.fork_daemon ~sw (fun () -> render_loop t duo);
   t

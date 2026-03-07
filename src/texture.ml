@@ -2,6 +2,8 @@ open Eio.Std
 module Vkt = Vk.Types
 module A = Vulkan.A
 
+let format = Vkt.Format.B8g8r8a8_srgb
+
 let blit ~src ~dst =
   Bigarray.Array1.blit src dst
 
@@ -30,7 +32,7 @@ let create ~sw ~command_pool ~device png =
   (* Allocate image memory on the GPU *)
   let image =
     Vulkan.Image.create ~sw device
-      ~format:Vkt.Format.B8g8r8a8_srgb
+      ~format
       ~extent:(Vkt.Extent_3d.make ~width ~height ~depth:1)
       ~flags:Vkt.Image_create_flags.empty
       ~tiling:Optimal

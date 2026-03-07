@@ -9,11 +9,11 @@ let animate ~sw ~frame_limit ~instance ~device ~model surface =
   let physical_device = Vulkan.Instance.find_device instance device in
   let device = Vulkan.Device.create ~sw physical_device in
   let render = Render.create ~sw ~device ~surface model in
-  while render.frame < frame_limit do
+  while render.scene.frame < frame_limit do
     let next_frame_due = surface#frame in
     Render.trigger_redraw render;
     Promise.await next_frame_due;
-    render.frame <- render.frame + 1
+    render.scene.frame <- render.scene.frame + 1
   done
 
 let main ~net ~frame_limit model =
