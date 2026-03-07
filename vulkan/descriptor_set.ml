@@ -50,7 +50,7 @@ let write (type a) dst_set ~dst_binding ~dst_array_element (typ : a typ) (values
     ~image_info:(Vkt.Descriptor_image_info.array image_info)
     ~texel_buffer_view
 
-let update device ~writes =
+let update ~device writes =
   Vkc.update_descriptor_sets ()
     ~device:(Device.dev device)
     ~descriptor_writes:(Vkt.Write_descriptor_set.array writes)

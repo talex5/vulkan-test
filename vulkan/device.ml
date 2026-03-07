@@ -61,6 +61,7 @@ let create ~sw physical_device =
       (* Export semaphores to synchronise with the compositor *)
       "VK_KHR_external_semaphore";
       "VK_KHR_external_semaphore_fd";
+      "VK_KHR_shader_draw_parameters";
     ] in
   let create_info = Vkt.Device_create_info.make ~queue_create_infos ~enabled_extension_names () in
   let device = Vkc.create_device () ~physical_device ~create_info <?> "create_device" in

@@ -106,7 +106,7 @@ let create ~sw ~device ~texture =
         ~sampler:(sampler ~sw device)
         ~image_layout:Shader_read_only_optimal
     in
-    Vulkan.Descriptor_set.update device ~writes:[
+    Vulkan.Descriptor_set.update ~device [
       Vulkan.Descriptor_set.write descriptor_set Uniform_buffer         [ubo]     ~dst_binding:0 ~dst_array_element:0;
       Vulkan.Descriptor_set.write descriptor_set Combined_image_sampler [texture] ~dst_binding:1 ~dst_array_element:0;
     ];

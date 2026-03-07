@@ -14,6 +14,10 @@ module Binding = Binding
 module Descriptor_set = Descriptor_set
 module Swap_chain = Swap_chain
 module Drm_format = Drm_format
+module Attachment_description = Attachment_description
+module Subpass = Subpass
+module Render_pass = Render_pass
+module Pipeline = Pipeline
 
 module Format = struct
   let of_drm (drm_format : Drm_format.t) =
