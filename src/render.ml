@@ -3,7 +3,7 @@ module Vkt = Vk.Types
 
 type t = {
   device : Vulkan.Device.t;
-  pipeline : Pipeline.t;
+  scene : Scene.t;
   surface : Surface.t;
   redraw_needed : Eio.Condition.t;
   mutable frame : int;
@@ -34,7 +34,7 @@ let record_commands t job (framebuffer : Surface.framebuffer) =
   Input.set input t.frame ~geometry:framebuffer.geometry;
   Vulkan.Cmd.reset command_buffer;
   Vulkan.Cmd.record command_buffer (fun () ->
-      Pipeline.record t.pipeline input command_buffer framebuffer
+      Scene.record t.scene input command_buffer framebuffer
     )
 
 (* Should probably get this added to [Eio.Condition]. *)
@@ -56,7 +56,7 @@ let create_framebuffer ~sw ~depth_buffer ~on_release t geometry =
       ~depth_buffer
       ~device:t.device
       ~format:t.surface#format
-      ~render_pass:t.pipeline.render_pass
+      ~render_pass:t.scene.render_pass
   in
   let render_finished = Vulkan.Semaphore.create_export ~sw device in
   let dmabuf = { Vulkan.Swap_chain.
@@ -93,10 +93,10 @@ let trigger_redraw t =
   Eio.Condition.broadcast t.redraw_needed
 
 let create ~sw ~device ~surface model =
-  let pipeline, inputs = Pipeline.create ~sw ~format:surface#format ~device model in
+  let scene, inputs = Scene.create ~sw ~format:surface#format ~device model in
   let command_pool = Vulkan.Cmd.create_pool ~sw device in
   let duo = Duo.make ~sw ~command_pool ~device inputs in
   let redraw_needed = Eio.Condition.create () in
-  let t = { device; surface; pipeline; redraw_needed; frame = 0 } in
+  let t = { device; surface; scene; redraw_needed; frame = 0 } in
   Fiber.fork_daemon ~sw (fun () -> render_loop t duo);
   t
