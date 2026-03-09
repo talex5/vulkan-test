@@ -18,6 +18,8 @@ module Attachment_description = Attachment_description
 module Subpass = Subpass
 module Render_pass = Render_pass
 module Pipeline = Pipeline
+module Matrix4x4 = Matrix4x4
+module Vec3 = Vec3
 
 module Format = struct
   let of_drm (drm_format : Drm_format.t) =

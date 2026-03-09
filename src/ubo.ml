@@ -1,5 +1,7 @@
 module Vkt = Vk.Types
 module A = Vulkan.A
+module Vec3 = Vulkan.Vec3
+module Matrix4x4 = Vulkan.Matrix4x4
 
 let float4x4 = Ctypes.(array 16 float)
 
@@ -20,39 +22,30 @@ module C = struct
   let proj = Ctypes.field ctype "proj" float4x4
   let () = Ctypes.seal ctype
   let size = Ctypes.sizeof ctype
-
-  let tau = Float.pi *. 2.
-  let z_near = 1.
-  let z_far = 10.
-  let fov_y = (1. /. 12.) *. tau
-  let scale_y = 1. /. tan (fov_y /. 2.)
-
-  let set t ~aspect frame_number =
-    let scale_x = scale_y *. aspect in
-    let model = Ctypes.getf t model in
-    let th = 0.6 +. 0.7 *. sin (float frame_number /. 200.) in
-    set_matrix model [
-      [-.sin th ; cos th ; 0.0 ; 0. ];
-      [0.       ; 0.0    ; -1.0; 0.4];
-      [cos th   ; sin th ; 0.0 ; -3.];
-      [0.       ; 0.     ; 0.  ; 1. ];
-    ];
-    let proj = Ctypes.getf t proj in
-    let scale_z = (z_far +. z_near) /. (z_near -. z_far) in
-    let bias_z = (2. *. z_far *. z_near) /. (z_near -. z_far) in
-    (* See gluPerspective *)
-    set_matrix proj [
-      [scale_x ; 0.      ; 0.      ; 0.    ];	(* Normalise x for FOV *)
-      [0.      ; scale_y ; 0.      ; 0.    ];	(* Normalise y for FOV *)
-      [0.      ; 0.      ; scale_z ; bias_z];	(* Normalise z (for clipping) *)
-      [0.      ; 0.      ; -1.     ; 0.    ];	(* Make far-away things smaller *)
-    ]
 end
+
+let tau = Float.pi *. 2.
+let z_near = 1.
+let z_far = 10.
+let fov_y = (1. /. 12.) *. tau
 
 type t = {
   info : Vkt.Descriptor_buffer_info.t;
   mapped : C.t;
 }
+
+let set t ~geometry:(width, height) frame_number =
+  let aspect = float width /. float height in
+  let c = t.mapped in
+  let set_matrix field v = Matrix4x4.write v (Ctypes.getf c field) in
+  let th = tau /. 4. +. 0.6 +. 0.7 *. sin (float frame_number /. 200.) in
+  set_matrix C.model Matrix4x4.(
+      translate (Vec3.v 0. 0.4 (-3.)) *
+      rot_y th *
+      rot_x (tau /. 4.0) *
+      scale_y (-1.0)
+    );
+  set_matrix C.proj (Matrix4x4.(perspective_projection ~fov_y ~aspect ~z_near ~z_far))
 
 let create ~sw ~device =
   let buffer = Vulkan.Buffer.create ~sw device C.size
@@ -63,7 +56,3 @@ let create ~sw ~device =
   let range = Vkt.Device_size.of_int C.size in
   let info = Vkt.Descriptor_buffer_info.make ~buffer:buffer.buffer ~offset:Vkt.Device_size.zero ~range () in
   { info; mapped }
-
-let set t ~geometry:(width, height) frame_number =
-  let aspect = float height /. float width in
-  C.set t.mapped ~aspect frame_number
