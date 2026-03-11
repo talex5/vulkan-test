@@ -28,13 +28,6 @@ let create_depth_buffer ~sw t (width, height) =
   Vulkan.Image.create_view ~sw ~format ~device img
     ~aspect_mask:Vkt.Image_aspect_flags.depth
 
-let record_commands t job (framebuffer : Surface.framebuffer) =
-  let { Duo.side; command_buffer } = job in
-  Vulkan.Cmd.reset command_buffer;
-  Vulkan.Cmd.record command_buffer (fun () ->
-      Scene.record t.scene command_buffer framebuffer side
-    )
-
 (* Should probably get this added to [Eio.Condition]. *)
 let next_as_promise cond =
   let p, r = Promise.create () in
@@ -71,7 +64,11 @@ let create_swapchain ~sw t geometry =
   let depth_buffer = create_depth_buffer ~sw t geometry in
   Vulkan.Swap_chain.create (create_framebuffer ~sw ~depth_buffer t geometry)
 
-let render_loop t duo =
+let render_loop ~device t =
+  Switch.run @@ fun sw ->
+  let command_pool = Vulkan.Cmd.create_pool ~sw device in
+  let command_buffers = Double.init (fun _ -> Vulkan.Cmd.allocate_buffer ~sw command_pool) in
+  let duo = Duo.make ~sw ~device in
   while true do
     let geometry = t.surface#geometry in
     Switch.run @@ fun sw ->
@@ -79,9 +76,11 @@ let render_loop t duo =
     while geometry = t.surface#geometry do
       let fb = Vulkan.Swap_chain.get_framebuffer framebuffers in
       let redraw_needed = next_as_promise t.redraw_needed in
-      let job = Duo.get duo in
-      record_commands t job fb;
-      Duo.submit duo fb job.command_buffer;
+      let side = duo.cpu_owns in
+      let cmd = Double.get command_buffers side in
+      Vulkan.Cmd.reset cmd;
+      Vulkan.Cmd.record cmd (fun () -> Scene.draw t.scene side cmd fb);
+      Duo.submit duo fb cmd;
       fb.buffer#attach;
       Promise.await redraw_needed
     done
@@ -92,9 +91,7 @@ let trigger_redraw t =
 
 let create ~sw ~device ~surface model =
   let scene = Scene.create ~sw ~format:surface#format ~device model in
-  let command_pool = Vulkan.Cmd.create_pool ~sw device in
-  let duo = Duo.make ~sw ~command_pool ~device in
   let redraw_needed = Eio.Condition.create () in
   let t = { device; surface; scene; redraw_needed } in
-  Fiber.fork_daemon ~sw (fun () -> render_loop t duo);
+  Fiber.fork_daemon ~sw (fun () -> render_loop ~device t);
   t

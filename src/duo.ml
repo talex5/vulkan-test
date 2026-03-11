@@ -2,33 +2,20 @@
 
 module Vkt = Vk.Types
 
-type job = {
-  side : Double.side;
-  command_buffer : Vkt.Command_buffer.t;
-}
-
 type t = {
   device : Vulkan.Device.t;
   in_flight_fence : Vkt.Fence.t;                (* Signalled when GPU finishes rendering pipeline *)
   image_available : Vkt.Semaphore.t;            (* Signalled when the compositer has finished showing the old image *)
-  jobs : job Double.t;
   mutable cpu_owns : Double.side;     (* Which job we last gave to the CPU *)
 }
 
-let make ~sw ~command_pool ~device =
-  let job side =
-    let command_buffer = Vulkan.Cmd.allocate_buffer ~sw command_pool in
-    { side; command_buffer }
-  in
+let make ~sw ~device =
   {
     device;
     in_flight_fence = Vulkan.Fence.create ~sw device Vkt.Fence_create_flags.signaled;
     image_available = Vulkan.Semaphore.create ~sw device;
-    jobs = Double.init job;
     cpu_owns = A;
   }
-
-let get t = Double.get t.jobs t.cpu_owns
 
 (* Note: Mesa's WSI also calls set_memory_ownership when acquiring and presenting images.
    I'm not sure what that's for (it doesn't do anything on my GPU) so I skipped it. *)

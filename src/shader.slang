@@ -1,6 +1,6 @@
 struct UniformBufferObject {
   float4x4 rot;
-  float4x4 proj;
+  float4x4 project_world;
 };
 
 layout(binding = 0) uniform ConstantBuffer<UniformBufferObject> ubo;
@@ -20,7 +20,7 @@ struct VSOutput {
 VSOutput vertMain(VSInput input) {
     VSOutput output;
     float4 model = mul(ubo.rot, float4(input.inPosition, 1.0));
-    output.pos = mul(ubo.proj, model);
+    output.pos = mul(ubo.project_world, model);
     output.fragTexCoord = input.inTexCoord;
     return output;
 }

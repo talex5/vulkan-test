@@ -1,5 +1,6 @@
 module Vkt = Vk.Types
 module A = Vulkan.A
+module Vec3 = Vulkan.Vec3
 
 let float_array = A.of_list Ctypes.float        (* Doesn't require GC protection *)
 
@@ -10,8 +11,7 @@ type t = {
   mutable frame : int;
 }
 
-(* The render needs a colour image, which it clears and then writes to. *)
-let render_pass format =
+let create ~sw ~format ~device model =
   let attachments = [
     (* The render needs a colour image, which it clears and then writes to: *)
     Vulkan.Attachment_description.make format
@@ -40,10 +40,15 @@ let render_pass format =
       ~src_access_mask:Vkt.Access_flags.depth_stencil_attachment_write
       ~dst_access_mask:Vkt.Access_flags.(depth_stencil_attachment_write + color_attachment_write)
   in
-  Vulkan.Render_pass.info ()
-    ~attachments
-    ~subpasses:[subpass]
-    ~dependencies:[dependency]
+  let render_pass = Vulkan.Device.create_render_pass ~sw device @@
+    Vulkan.Render_pass.info ()
+      ~attachments
+      ~subpasses:[subpass]
+      ~dependencies:[dependency]
+  in
+  let ubo = Double.init (fun (_ : Double.side) -> Ubo.create ~sw ~device) in
+  let room = Room.create ~sw ~device ~ubo ~render_pass model in
+  { render_pass; ubo; room; frame = 0 }
 
 let viewport ~width ~height =
   Vkt.Viewport.make
@@ -59,17 +64,28 @@ let rect ~x ~y ~width ~height =
   let extent = Vkt.Extent_2d.make ~width ~height in
   Vkt.Rect_2d.make ~offset ~extent
 
-let create ~sw ~format ~device model =
-  let ubo = Double.init (fun (_ : Double.side) -> Ubo.create ~sw ~device) in
-  let render_pass = Vulkan.Device.create_render_pass ~sw device (render_pass format) in
-  let room = Room.create ~sw ~device ~ubo ~render_pass model in
-  { render_pass; ubo; room; frame = 0 }
+let tau = Float.pi *. 2.
+let z_near = 1.
+let z_far = 10.
+let fov_y = (1. /. 12.) *. tau
 
-let record t cmd framebuffer side =
+let draw t side cmd framebuffer =
   let { Surface.framebuffer; geometry; _ } = framebuffer in
   let draw_room = Double.get t.room side in
-  Ubo.set (Double.get t.ubo side) t.frame ~geometry;
   let (width, height) = geometry in
+  let ubo = Double.get t.ubo side in
+  let aspect = float width /. float height in
+  let th = tau /. 4. +. 0.6 +. 0.7 *. sin (float t.frame /. 200.) in
+  let model = Vulkan.Matrix4x4.(
+      translate (Vec3.v 0. 0.4 (-3.)) *
+      rot_y th *
+      rot_x (tau /. 4.0) *
+      scale_y (-1.0)
+    )
+  in
+  let project_world = Vulkan.Matrix4x4.(perspective_projection ~fov_y ~aspect ~z_near ~z_far) in
+  Ubo.set ubo ~model ~project_world;
+  (* Write the rendering operations to the command buffer. *)
   let black = Vkt.Clear_color_value.float_32 (float_array [0.0; 0.0; 0.0; 1.0]) in
   let far = Vkt.Clear_depth_stencil_value.make ~depth:1.0 ~stencil:0 in
   let clear_values = Vkt.Clear_value.array [
