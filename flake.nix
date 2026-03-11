@@ -11,13 +11,9 @@
       url = "github:talex5/olivine/fix-record-ext";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    eio-trace = {
-      url = "github:ocaml-multicore/eio-trace";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
-  outputs = { self, nixpkgs, eio-trace, olivine, gbm-ocaml }:
+  outputs = { self, nixpkgs, olivine, gbm-ocaml }:
   let
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
@@ -33,7 +29,7 @@
       VK_LAYER_PATH = "${pkgs.vulkan-validation-layers}/share/vulkan/explicit_layer.d";
 
       buildInputs = self.outputs.packages.${system}.default.buildInputs;
-      packages = [ pkgs.ocamlPackages.ocp-indent eio-trace.packages.${system}.default ];
+      packages = [ pkgs.ocamlPackages.ocp-indent ];
       shellHook = ''exec ${pkgs.fish}/bin/fish'';
     };
   };

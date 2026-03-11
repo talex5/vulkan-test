@@ -10,7 +10,6 @@ depends: [
   "ppx_blob"
   "eio_main"
   "wayland"
-  "cairo2"
   "libdrm"
   "logs"
 ]
