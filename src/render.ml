@@ -89,8 +89,8 @@ let render_loop ~device t =
 let trigger_redraw t =
   Eio.Condition.broadcast t.redraw_needed
 
-let create ~sw ~device ~surface model =
-  let scene = Scene.create ~sw ~format:surface#format ~device model in
+let create ~sw ~device ~surface =
+  let scene = Scene.create ~sw ~format:surface#format ~device in
   let redraw_needed = Eio.Condition.create () in
   let t = { device; surface; scene; redraw_needed } in
   Fiber.fork_daemon ~sw (fun () -> render_loop ~device t);

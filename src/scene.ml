@@ -7,11 +7,11 @@ let float_array = A.of_list Ctypes.float        (* Doesn't require GC protection
 type t = {
   render_pass : Vkt.Render_pass.t;
   ubo : Ubo.t Double.t;
-  room : (Vkt.Command_buffer.t -> unit) Double.t;
+  ship : Ship.t;
   mutable frame : int;
 }
 
-let create ~sw ~format ~device model =
+let create ~sw ~format ~device =
   let attachments = [
     (* The render needs a colour image, which it clears and then writes to: *)
     Vulkan.Attachment_description.make format
@@ -47,8 +47,8 @@ let create ~sw ~format ~device model =
       ~dependencies:[dependency]
   in
   let ubo = Double.init (fun (_ : Double.side) -> Ubo.create ~sw ~device) in
-  let room = Room.create ~sw ~device ~ubo ~render_pass model in
-  { render_pass; ubo; room; frame = 0 }
+  let ship = Ship.create ~sw ~device ~ubo ~render_pass in
+  { render_pass; ubo; ship; frame = 0 }
 
 let viewport ~width ~height =
   Vkt.Viewport.make
@@ -66,25 +66,23 @@ let rect ~x ~y ~width ~height =
 
 let tau = Float.pi *. 2.
 let z_near = 1.
-let z_far = 10.
+let z_far = 100.
 let fov_y = (1. /. 12.) *. tau
 
 let draw t side cmd framebuffer =
   let { Surface.framebuffer; geometry; _ } = framebuffer in
-  let draw_room = Double.get t.room side in
   let (width, height) = geometry in
   let ubo = Double.get t.ubo side in
+  (* Configure the uniform buffer with the camera details. *)
   let aspect = float width /. float height in
-  let th = tau /. 4. +. 0.6 +. 0.7 *. sin (float t.frame /. 200.) in
-  let model = Vulkan.Matrix4x4.(
-      translate (Vec3.v 0. 0.4 (-3.)) *
-      rot_y th *
-      rot_x (tau /. 4.0) *
-      scale_y (-1.0)
-    )
-  in
-  let project_world = Vulkan.Matrix4x4.(perspective_projection ~fov_y ~aspect ~z_near ~z_far) in
-  Ubo.set ubo ~model ~project_world;
+  let camera_pos = Vec3.v 0.0 10.0 0.0 in
+  let project_world = Vulkan.Matrix4x4.(
+      perspective_projection ~fov_y ~aspect ~z_near ~z_far *
+      rot_x (tau *. 90.0 /. 360.) *
+      translate (Vec3.neg camera_pos)) in
+  Ubo.set_camera ubo
+    ~camera_pos
+    ~project_world;
   (* Write the rendering operations to the command buffer. *)
   let black = Vkt.Clear_color_value.float_32 (float_array [0.0; 0.0; 0.0; 1.0]) in
   let far = Vkt.Clear_depth_stencil_value.make ~depth:1.0 ~stencil:0 in
@@ -97,5 +95,5 @@ let draw t side cmd framebuffer =
   Vulkan.Cmd.render_pass cmd info ~subpass_contents:Inline (fun () ->
       Vulkan.Cmd.set_viewport cmd ~first_viewport:0 [viewport ~width ~height];
       Vulkan.Cmd.set_scissor cmd ~first_scissor:0 [render_area];
-      draw_room cmd;
+      Ship.draw t.ship side cmd;
     )

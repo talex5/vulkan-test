@@ -3,7 +3,7 @@ using Vulkan but without its Wayland-support extension.
 
 If run without `$WAYLAND_DISPLAY` set then it will try to use KMS to render directly to the screen.
 
-This is intended for tracing, to help me learn about graphics.
+This is intended to help me learn about graphics.
 
 To run:
 
@@ -11,12 +11,10 @@ To run:
 git clone https://github.com/talex5/vulkan-test.git
 cd vulkan-test
 nix develop
-make download-example
-dune exec -- ./src/main.exe 10000 viking_room.obj viking_room.png
+dune exec -- ./src/main.exe
 ```
 
-You should see an animation of a 3D viking room.
-The `10000` is the number of frames it will show before quitting.
+You should see an animation of a spaceship.
 
 For more information, see these blog posts:
 
