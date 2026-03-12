@@ -1,7 +1,7 @@
 (executable
   (name main)
   (preprocess (pps ppx_blob))
-  (preprocessor_deps (file ship.spv))
+  (preprocessor_deps (file landscape.spv) (file ship.spv))
   (libraries fmt olivine eio_main wayland wayland.protocols logs.fmt libdrm vulkan))
 
 (rule
@@ -15,4 +15,17 @@
          -fvk-use-entrypoint-name
          -entry vertShip
          -entry fragShip
+         -o %{target})))
+
+(rule
+  (target landscape.spv)
+  (deps (file ubo.slang))
+  (action
+    (run slangc %{dep:landscape.slang}
+         -target spirv
+         -profile spirv_1_4
+         -emit-spirv-directly
+         -fvk-use-entrypoint-name
+         -entry vertLandscape
+         -entry fragLandscape
          -o %{target})))

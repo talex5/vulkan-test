@@ -20,7 +20,7 @@ static const float3 sunlight = { 1, 1, 0.1 };           // Yellowish
 VSOutput vertShip(ShipVertex vert) {
     VSOutput output;
 
-    float4 world_pos = mul(ubo.ship_rot, float4(vert.pos, 1));
+    float4 world_pos = float4(ubo.ship_pos, 0) + mul(ubo.ship_rot, float4(vert.pos, 1));
     output.pos = mul(ubo.project_world, world_pos);
 
     // Calculate face colour (Phong shading)
@@ -37,7 +37,7 @@ VSOutput vertShip(ShipVertex vert) {
 
     // In theory, we should do this in the fragment shader, but it's simpler
     // to do it once and just take the centre of the ship as the starting point.
-    float3 viewer = normalize(ubo.camera_pos);
+    float3 viewer = normalize(ubo.camera_pos - ubo.ship_pos);
 
     // Degree to which the viewer is in the direction of the sun's reflection
     float dot_refl_viewer = dot(refl, viewer);          // -ve if facing away

@@ -3,6 +3,7 @@ module Vkt = Vk.Types
 type t = {
   render_pass : Vkt.Render_pass.t;
   ubo : Ubo.t Double.t;
+  landscape : Landscape.t;
   ship : Ship.t;
   mutable frame : int;
 }
