@@ -1,4 +1,4 @@
-(** The flying craft. *)
+(** Rendering the landscape in 3D. *)
 
 open Eio.Std
 module Vkt = Vk.Types
@@ -13,7 +13,3 @@ val create :
   t
 
 val draw : t -> Double.side -> Vkt.Command_buffer.t -> unit
-
-val pos : t -> Vulkan.Vec3.t
-
-val update : frame:int -> t -> unit

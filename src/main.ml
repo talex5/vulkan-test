@@ -11,7 +11,10 @@ let app_info = Vulkan.Instance.application_info "vulkan-test-ocaml" ~version:(1,
 
 let animate ~sw ~instance ~device surface : unit =
   let physical_device = Vulkan.Instance.find_device instance device in
-  let device = Vulkan.Device.create ~sw ~extensions:surface#vulkan_extensions physical_device in
+  let device = Vulkan.Device.create ~sw physical_device
+      ~extensions:surface#vulkan_extensions
+      ~features_1_1:Vk.Types.Physical_device_vulkan_1_1_features.Fields.[shader_draw_parameters]
+  in
   let render = Render.create ~sw ~device ~surface in
   while true do
     let next_frame_due = surface#frame in

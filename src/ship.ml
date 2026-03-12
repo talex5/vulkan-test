@@ -166,7 +166,9 @@ type t = {
 
 let create ~sw ~device ~ubo ~render_pass =
   let state = {
-    Ubo.pitch = 0.0;
+    Ubo.pos = Vec3.v 5.0 5.0 6.0;
+    vel = Vec3.v 0.06 0.1 0.0;
+    pitch = 0.0;
     yaw = 0.0;
   } in
   let shader = Vulkan.Shader.load ~sw device shader_code in
@@ -215,6 +217,7 @@ let create ~sw ~device ~ubo ~render_pass =
         ];
         fun cmd ->
           Ubo.set_ship ubo
+            ~ship_pos:state.pos
             ~ship_rot:Vulkan.Matrix4x4.(
                 rot_z state.yaw *
                 rot_x state.pitch
@@ -234,5 +237,8 @@ let draw t side cmd =
 
 let update ~frame t =
   let f = float frame /. 100. in
+  t.state.pos <- Vec3.(t.state.pos + t.state.vel);
   t.state.pitch <- 3. *. f;
-  t.state.yaw <- 2. *. f;
+  t.state.yaw <- 2. *. f
+
+let pos t = t.state.pos
