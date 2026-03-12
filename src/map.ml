@@ -7,17 +7,17 @@ let size = (width, height)
 
 let pad_x, pad_y = (10., 10.)
 let pad_size = 10.
-let pad_elevation = 20.0
+let pad_elevation = 1.
 
-let rock_line = 110             (* Rocks at the top of mountains *)
-let max_elevation = 130         (* Invert heights above this (volcano effect) *)
-let lava_line = 150             (* Lava inside volcanoes *)
+let rock_line = 8.5             (* Rocks at the top of mountains *)
+let max_elevation = 9.          (* Invert heights above this (volcano effect) *)
+let lava_line = 9.8             (* Lava inside volcanoes *)
 
 let in_pad x y =
   x >= pad_x && x <= pad_x +. pad_size &&
   y >= pad_y && y <= pad_y +. pad_size
 
-let height_map = Bigarray.(Array2.create Int C_layout width height)
+let height_map = Bigarray.(Array2.create Float32 C_layout width height)
 
 (* OCaml's built-in mod function has unhelpful behaviour with negative numbers. *)
 let (mod) a b =
@@ -32,7 +32,16 @@ module Bigarray = struct
   end
 end
 
-let tau = Float.pi *. 2.
+(* To avoid having to wrap the height map, starts making the land go down this far
+   from the map edges. *)
+let edge_water_width = 30
+
+let clamp ~min ~max v =
+  if v < min then min
+  else if v > max then max
+  else v
+
+let sea_level = 0.2
 
 (* Generate the logical heights.
    For sea, this is the height of the sea-bed.
@@ -41,32 +50,44 @@ let () =
   for x = 0 to width - 1 do
     for y = 0 to height - 1 do
       let v =
-        let x = float x in
-        let y = float y in
-        if in_pad x y then pad_elevation
+        let fx = float x in
+        let fy = float y in
+        if in_pad fx fy then pad_elevation
         else (
-          sin (tau *. (0.5 +. 3. *. x /. float width)) +.
-          sin (tau *. (0.5 +. 5. *. y /. float height)) +.
-          0.3 *. sin (tau *. (0.1 +. 7. *. x /. float width)) +.
-          0.4 *. sin (tau *. (0.7 +. 11. *. y /. float height))
-        ) *. 80. -. 30.
+          let v =
+            15.0 *.
+            Perlin.perlin2d (fx, fy)
+              ~freq:(1. /. 32.0)
+              ~depth:3
+          in
+          let to_edge =
+            min edge_water_width @@
+            min
+              (min x (width - x))
+              (min y (height - y))
+          in
+          Perlin.lerp (-1.) v (float to_edge /. float edge_water_width)
+        )
       in
-      height_map.{x, y} <- truncate v;
+      (* Don't waste too much of our 8 bits of height on underwater.
+         We only draw deep vs not-deep anyway. *)
+      let v = if v < sea_level then sea_level -. (sea_level -. v) /. 10. else v in
+      height_map.{x, y} <- clamp ~min:0.0 ~max:10.0 v;
     done
   done
 
 (* Apply "volcano" effect to stop things getting too high. *)
 let elevation x y =
   let v = height_map.{x, y} in
-  let excess_height = v - max_elevation in
-  if excess_height > 0 then v - 2 * excess_height else v
+  let excess_height = v -. max_elevation in
+  if excess_height > 0. then v -. 2. *. excess_height else v
 
 let create_heights ~sw ~command_pool ~device =
   Texture.init ~sw ~device ~command_pool R8_unorm (width, height) @@ fun data ->
   for x = 0 to width - 1 do
     for y = 0 to height - 1 do
       let v = elevation x y in
-      data.{y, x} <- max 0 v;
+      data.{y, x} <- truncate (25.5 *. v);
     done
   done
 
@@ -78,9 +99,9 @@ let normal x y =
   let a = elevation x y in
   let b = elevation (x + 1) y in
   let c = elevation x (y + 1) in
-  let ab = b - a in
-  let ac = c - a in
-  Vec3.(norm (v (float (-ab)) (float (-ac)) 1.0))
+  let ab = b -. a in
+  let ac = c -. a in
+  Vec3.(norm (v (-.ab) (-.ac) 1.0))
 
 (* Colours *)
 let forest = Vec3.v 0.0 0.4 0.0
@@ -92,7 +113,11 @@ let lava = Vec3.v 0.4 0.0 0.0
 let generate_tile_colour x y =
   let n = normal x y in
   let n_dot_sun = Vec3.dot n sun in
-  let typ = Random.float 1.0 in
+  let typ =
+    Perlin.perlin2d (float x, float y)
+      ~freq:(1. /. 5.0)
+      ~depth:2
+  in
   let height =
     let v = height_map.{x, y} in
     if v >= lava_line then `Mountain_hollow
@@ -113,7 +138,7 @@ let generate_tile_colour x y =
       (c.y +. Random.float 0.2)
       (c.z +. Random.float 0.2)
   in
-  let intensity = 0.5 +. 2. *. n_dot_sun in
+  let intensity = 0.5 +. 1.0 *. n_dot_sun in
   Vec3.scale intensity c
 
 let pad_color x y =
@@ -137,7 +162,3 @@ let create_tiles ~sw ~command_pool ~device =
         (to_int c.x lsl 16)
     done
   done
-
-let scale x = x /. 25.6
-let pad_elevation = scale pad_elevation
-let elevation x y = scale (float (elevation x y))
