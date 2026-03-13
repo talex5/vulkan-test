@@ -69,7 +69,7 @@ let scale_z = scale_axis 2
 let pp f t =
   Fmt.pf f "@[<v>";
   for row = 0 to 3 do
-    let cell f col = Fmt.pf f "% 3.1f" t.{row, col} in
+    let cell f col = Fmt.pf f "% 5.1f" t.{row, col} in
     Fmt.pf f "| %a %a %a %a |@,"
       cell 0
       cell 1
@@ -83,15 +83,10 @@ let perspective_projection ~fov_y ~aspect ~z_near ~z_far =
   let scale_x = scale_y /. aspect in
   let scale_z = (z_far +. z_near) /. (z_near -. z_far) in
   let bias_z = (2. *. z_far *. z_near) /. (z_near -. z_far) in
-  init (fun (r, c) ->
-      match r, c with
-      | 0, 0 -> scale_x         (* Normalise x for FOV *)
-      | 1, 1 -> scale_y         (* Normalise y for FOV *)
-      | 2, 2 -> scale_z         (* Normalise z (for clipping) *)
-      | 2, 3 -> bias_z          
-      | 3, 2 -> -1.             (* Make far-away things smaller *)
-      | _ -> 0.0
-    )
+  [| scale_x ; 0.      ; 0.         ; 0.      ;
+     0.      ; scale_y ; 0.         ; 0.      ;
+     0.      ; 0.      ; -. scale_z ; bias_z  ;
+     0.      ; 0.      ; 1.         ; 0.     |]
 
 let ( * ) a b =
   init (fun (r, c) ->
@@ -101,3 +96,13 @@ let ( * ) a b =
 
 let ( + ) a b =
   init (fun (r, c) -> a.{r, c} +. b.{r, c})
+
+let look ~from:eye ~at:target ~up =
+  let f = Vec3.(norm (target - eye)) in
+  let right = Vec3.(norm (cross f up)) in
+  let up = Vec3.cross right f in
+  let eye_dot = Vec3.dot eye in
+  [| right.x ; right.y ; right.z ; -. eye_dot right ;
+     up.x    ; up.y    ; up.z    ; -. eye_dot up    ;
+     -. f.x  ; -. f.y  ; -. f.z  ; eye_dot f        ;
+     0.      ; 0.      ; 0.      ; 1.              |]

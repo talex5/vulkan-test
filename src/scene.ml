@@ -67,22 +67,44 @@ let rect ~x ~y ~width ~height =
 let tau = Float.pi *. 2.
 let z_near = 1.
 let z_far = 100.
-let fov_y = (1. /. 12.) *. tau
+let camera_to_ship = 5.0
+let fov_y = tau /. 12.0
+
+let projection = `Perspective
+(* let projection = `Overhead *)
+
+(* Configure the uniform buffer with the camera details. *)
+let configure_camera ubo (width, height) =
+  let ship_pos = Vec3.zero in
+  match projection with
+  | `Overhead ->
+    let camera_pos = {ship_pos with z = 1.0} in
+    let project_world = Vulkan.Matrix4x4.(
+        rot_x (tau /. 2.) *             (* Convert to Vulkan clip space axes (Y down, Z into screen). *)
+        scale 0.5 *
+        Vulkan.Matrix4x4.look           (* This is just a translation to [camera_pos]. *)
+          ~from:camera_pos
+          ~at:{ship_pos with z = 0.0}
+          ~up:(Vec3.v 0. 1. 0.)
+      ) in
+    Ubo.set_camera ubo ~camera_pos ~project_world
+  | `Perspective ->
+    let aspect = width /. height in
+    let camera_target = ship_pos in
+    let camera_pos = { camera_target with y = camera_target.y -. camera_to_ship } in
+    let up = Vec3.v 0.0 0.0 1.0 in
+    let project_world = Vulkan.Matrix4x4.(
+        perspective_projection ~fov_y ~aspect ~z_near ~z_far *
+        rot_x (tau /. 2.) *
+        Vulkan.Matrix4x4.look ~from:camera_pos ~at:camera_target ~up
+      ) in
+    Ubo.set_camera ubo ~camera_pos ~project_world
 
 let draw t side cmd framebuffer =
   let { Surface.framebuffer; geometry; _ } = framebuffer in
   let (width, height) = geometry in
   let ubo = Double.get t.ubo side in
-  (* Configure the uniform buffer with the camera details. *)
-  let aspect = float width /. float height in
-  let camera_pos = Vec3.v 0.0 10.0 0.0 in
-  let project_world = Vulkan.Matrix4x4.(
-      perspective_projection ~fov_y ~aspect ~z_near ~z_far *
-      rot_x (tau *. 90.0 /. 360.) *
-      translate (Vec3.neg camera_pos)) in
-  Ubo.set_camera ubo
-    ~camera_pos
-    ~project_world;
+  configure_camera ubo (float width, float height);
   (* Write the rendering operations to the command buffer. *)
   let black = Vkt.Clear_color_value.float_32 (float_array [0.0; 0.0; 0.0; 1.0]) in
   let far = Vkt.Clear_depth_stencil_value.make ~depth:1.0 ~stencil:0 in

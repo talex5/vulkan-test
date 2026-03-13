@@ -47,11 +47,11 @@ module Model = struct
     let v x y z = Vec3.(0.5 *. v x y z) in
     [|
       v ( 0.0) ( 0.0) ( 0.5);
-      v (-1.0) (-2.0) (-0.5);
-      v ( 1.0) (-2.0) (-0.5);
-      v (-3.0) ( 1.0) (-0.5);
-      v ( 3.0) ( 1.0) (-0.5);
-      v ( 0.0) ( 1.5) (-0.5);
+      v (-1.0) ( 2.0) (-0.5);
+      v ( 1.0) ( 2.0) (-0.5);
+      v (-3.0) (-1.0) (-0.5);
+      v ( 3.0) (-1.0) (-0.5);
+      v ( 0.0) (-1.5) (-0.5);
     |]
 
   (* For each face, give the three vertices and the face's colour.
@@ -92,7 +92,7 @@ module Model = struct
         let (_, b, c, colour) = find_face i in
         let b = vertices.(b) in
         let c = vertices.(c) in
-        let normal = Vec3.(norm (cross (b - a) (c - a))) in
+        let normal = Vec3.(norm (cross (c - a) (b - a))) in
         Vertex.make ~pos:a ~colour ~normal
       )
     |> Array.to_list
@@ -194,15 +194,15 @@ let create ~sw ~device ~ubo ~render_pass =
         ~depth_bias_slope_factor:0.0
     in
     Vulkan.Pipeline.make ~sw ~device ~render_pass ()
-      ~stages:(Vkt.Pipeline_shader_stage_create_info.array [
-          shader "vertShip" Vkt.Shader_stage_flags.vertex;
-          shader "fragShip" Vkt.Shader_stage_flags.fragment;
-        ])
       ~vertex_input_state:vertices
       ~topology:Triangle_list
       ~rasterizer
       ~layout:pipeline_layout
       ~depth_stencil_state:depth_testing
+      ~stages:[
+        shader "vertShip" Vkt.Shader_stage_flags.vertex;
+        shader "fragShip" Vkt.Shader_stage_flags.fragment;
+      ]
   in
   let model = Model.allocate ~sw ~device in
   let descriptor_sets = Vulkan.Descriptor_set.allocate pool set_layout max_sets in
