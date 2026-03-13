@@ -43,3 +43,11 @@ val perspective_projection : fov_y:float -> aspect:float -> z_near:float -> z_fa
     @param aspect : aspect ratio (screen width divided by height)
     @param z_near : distance to near clipping plane (i.e. the distance from your eye to the screen)
     @param z_far : distance to far clipping plane *)
+
+val look : from:Vec3.t -> at:Vec3.t -> up:Vec3.t -> t
+(** [look ~from ~at ~up] transforms a vector (x, y, z) into a space where:
+    - [from] is at the origin.
+    - "forwards" is the direction of [at] from [from].
+    - Increasing z moves backwards.
+    - Increasing y moves [up].
+    - Increating x moves right (relative to [up]). *)

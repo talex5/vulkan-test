@@ -93,7 +93,7 @@ let make
   Device.create_pipeline ~sw device @@
   Vkt.Graphics_pipeline_create_info.make ()
     ~layout
-    ~stages
+    ~stages:(Vkt.Pipeline_shader_stage_create_info.array stages)
     ~vertex_input_state
     ~input_assembly_state
     ~viewport_state
