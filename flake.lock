@@ -21,6 +21,27 @@
         "type": "github"
       }
     },
+    "libinput-ocaml": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1773140848,
+        "narHash": "sha256-Z1c5G1E5G1000qqHrL4G9PFPS3mAE4tthQvrQFsS/hY=",
+        "owner": "talex5",
+        "repo": "libinput-ocaml",
+        "rev": "76410a65999376c94cde7a9a225a4337623a4a3c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "talex5",
+        "ref": "main",
+        "repo": "libinput-ocaml",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1773229402,
@@ -61,6 +82,7 @@
     "root": {
       "inputs": {
         "libdrm-ocaml": "libdrm-ocaml",
+        "libinput-ocaml": "libinput-ocaml",
         "nixpkgs": "nixpkgs",
         "olivine": "olivine"
       }

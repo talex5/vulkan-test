@@ -137,3 +137,7 @@ let create_tiles ~sw ~command_pool ~device =
         (to_int c.x lsl 16)
     done
   done
+
+let scale x = x /. 25.6
+let pad_elevation = scale pad_elevation
+let elevation x y = scale (float (elevation x y))

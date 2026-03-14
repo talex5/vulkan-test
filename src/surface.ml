@@ -27,10 +27,17 @@ type framebuffer = {
   geometry : int * int;
 }
 
+type pointer_state = {
+  x : float;    (* 0 to 1 *)
+  y : float;    (* 0 to 1 *)
+  thrust : float; (* 0 to 1 *)
+}
+
 type t = <
   format : Vkt.Format.t;
   geometry : int * int;
   create_image : sw:Eio.Switch.t -> device:Vulkan.Device.t -> (int * int) -> Vkt.Image.t;
   import_buffer : sw:Eio.Switch.t -> on_release:(unit -> unit) -> Vulkan.Swap_chain.dmabuf -> buffer;
   frame : unit Eio.Promise.t;
+  pointer_state : pointer_state;
 >

@@ -6,6 +6,8 @@ module Vec3 = Vulkan.Vec3
 
 let shader_code = [%blob "./ship.spv"]
 
+let gravity = 0.002
+
 module Vertex = struct
   type mark
   type t = mark Ctypes.structure
@@ -166,8 +168,8 @@ type t = {
 
 let create ~sw ~device ~ubo ~render_pass =
   let state = {
-    Ubo.pos = Vec3.v 5.0 5.0 6.0;
-    vel = Vec3.v 0.06 0.1 0.0;
+    Ubo.pos = Vec3.v 15.0 15.0 6.0;
+    vel = Vec3.zero;
     pitch = 0.0;
     yaw = 0.0;
   } in
@@ -235,10 +237,47 @@ let create ~sw ~device ~ubo ~render_pass =
 let draw t side cmd =
   Double.get t.draw side cmd
 
-let update ~frame t =
-  let f = float frame /. 100. in
-  t.state.pos <- Vec3.(t.state.pos + t.state.vel);
-  t.state.pitch <- 3. *. f;
-  t.state.yaw <- 2. *. f
+let wrap { Vec3.x; y; z } : Vec3.t =
+  let w v max =
+    let max = float max in
+    let v = Float.rem v max in
+    if v < 0. then v +. max else v
+  in
+  {
+    x = w x (fst Map.size);
+    y = w y (snd Map.size);
+    z;
+  }
+
+let update ~(pointer : Surface.pointer_state) t =
+  let state = t.state in
+  let pointer_x = pointer.x -. 0.5 in
+  let pointer_y = pointer.y -. 0.5 in
+  let on_pad =
+    Map.in_pad state.pos.x state.pos.y &&
+    state.pos.z -. 1.0 < Map.pad_elevation
+  in
+  state.yaw <- -. Float.atan2 pointer_x (-. pointer_y);
+  let pitch = -. 5.0 *. Float.sqrt (pointer_x ** 2. +. pointer_y ** 2.) in
+  state.pitch <- if on_pad then max (-0.3) pitch else pitch;
+  let thrust = pointer.thrust *. 0.01 in
+  let accel =
+    Vec3.v
+      (thrust *. sin state.yaw *. sin state.pitch)
+      (-. thrust *. cos state.yaw *. sin state.pitch)
+      (thrust *. cos state.pitch -. gravity)
+  in
+  let drag = if on_pad then 0.9 else 0.99 in
+  let vel = Vec3.(drag *. state.vel + accel) in
+  let vel = if on_pad then { vel with z = max vel.z (Map.pad_elevation -. state.pos.z) } else vel in
+  state.vel <- vel;
+  let pos = Vec3.(wrap (state.pos + vel)) in
+  let surface_z = Map.elevation (truncate state.pos.x) (truncate state.pos.y) in
+  if pos.z < surface_z +. 0.5 then (
+    state.pos <- { pos with z = surface_z +. 0.5 };
+    state.vel <- { state.vel with z = 0.0 };
+  ) else (
+    state.pos <- pos
+  )
 
 let pos t = t.state.pos

@@ -13,7 +13,6 @@ type t = {
   ubo : Ubo.t Double.t;
   landscape : Landscape.t;
   ship : Ship.t;
-  mutable frame : int;
 }
 
 let create ~sw ~format ~device =
@@ -54,7 +53,7 @@ let create ~sw ~format ~device =
   let ubo = Double.init (fun (_ : Double.side) -> Ubo.create ~sw ~device) in
   let landscape = Landscape.create ~sw ~device ~ubo ~render_pass in
   let ship = Ship.create ~sw ~device ~ubo ~render_pass in
-  { render_pass; ubo; landscape; ship; frame = 0 }
+  { render_pass; ubo; landscape; ship }
 
 let viewport ~width ~height =
   Vkt.Viewport.make
