@@ -39,6 +39,12 @@ type framebuffer = {
   geometry : int * int;
 }
 
+type pointer_state = {
+  x : float;    (* 0 to 1 *)
+  y : float;    (* 0 to 1 *)
+  thrust : float; (* 0 to 1 *)
+}
+
 type t = <
   format : Vkt.Format.t;
   geometry : int * int;
@@ -52,4 +58,5 @@ type t = <
 
   frame : unit Eio.Promise.t;
   vulkan_extensions : string list;
+  pointer_state : pointer_state;
 >

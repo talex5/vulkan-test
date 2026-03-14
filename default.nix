@@ -1,5 +1,5 @@
 { pkgs, pkgconf, shader-slang, vulkan-loader, vulkan-validation-layers, libffi,
-  gbm-ocaml, olivine, linuxHeaders, ocamlPackages }:
+  gbm-ocaml, libinput-ocaml, olivine, linuxHeaders, ocamlPackages }:
 
 pkgs.stdenv.mkDerivation {
   name = "vulkan-test-ocaml";
@@ -7,7 +7,7 @@ pkgs.stdenv.mkDerivation {
   src = ./.;
 
   buildInputs = [
-    pkgconf shader-slang vulkan-loader vulkan-validation-layers libffi gbm-ocaml olivine
+    pkgconf shader-slang vulkan-loader vulkan-validation-layers libffi gbm-ocaml libinput-ocaml olivine
   ] ++ (with ocamlPackages; [
     dune_3 dune-configurator ocaml ppxlib integers ppx_blob findlib ctypes-foreign ctypes
     xmlm fmt menhir eio_main ocamlPackages.wayland

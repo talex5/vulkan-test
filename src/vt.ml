@@ -21,7 +21,99 @@ type t = {
   mutable enqueued_fb : fb option;          (* Enqueued to become visible (and possibly already is; confirmation pending) *)
   flip_complete : Eio.Condition.t;          (* [enqueued_fb] has become [None]. *)
   mutable next_frame_due : unit Promise.t * unit Promise.u;
+  pointer_state : Surface.pointer_state ref;
 }
+
+let geometry t =
+  let mode = Option.get t.crtc.mode in
+  (mode.hdisplay, mode.vdisplay)
+
+module In = struct
+  let log_level = Input.Context.Log.Priority.Info
+
+  type nonrec t = {
+    vt : t;
+    count : (Input.Device.Capability.t, int) Hashtbl.t;
+  }
+
+  let useful_types = Input.Device.Capability.[Keyboard; Pointer]
+
+  let count t cap =
+    Hashtbl.find_opt t.count cap |> Option.value ~default:0
+
+  let update_count t ev delta =
+    let dev = Input.Event.get_device ev in
+    useful_types |> List.iter @@ fun cap ->
+    if Input.Device.has_capability dev cap then (
+      Hashtbl.replace t.count cap (count t cap + delta)
+    )
+
+  (* Handle one event *)
+  let handle t : Input.Event.ty -> unit = function
+    | `Device_added   e -> update_count t e (+1)
+    | `Device_removed e -> update_count t e (-1)
+    | `Keyboard_key e when Input.Event.Keyboard.get_key e = Input.Keycode.key_esc -> raise Exit
+    | `Pointer_motion e ->
+      let dx = Input.Event.Pointer.get_dx e in
+      let dy = Input.Event.Pointer.get_dy e in
+      let state = !(t.vt.pointer_state) in
+      let width, height = geometry t.vt in
+      t.vt.pointer_state := {
+        state with
+        x = state.x +. dx /. float width;
+        y = state.y +. dy /. float height;
+      }
+    | `Pointer_button e ->
+      let b = Input.Event.Pointer.get_button e in
+      if b = Input.Keycode.btn_left then (
+        let thrust =
+          match Input.Event.Pointer.get_button_state e with
+          | `Released -> 0.0
+          | `Pressed -> 1.0
+        in
+        t.vt.pointer_state := { !(t.vt.pointer_state) with thrust }
+      )
+    | `Tablet_tool_axis e ->
+      let x = Input.Event.Tablet_tool.get_x_transformed ~width:1000000 e /. 1e6 in
+      let y = Input.Event.Tablet_tool.get_y_transformed ~height:1000000 e /. 1e6 in
+      let thrust = Input.Event.Tablet_tool.get_pressure e in
+      t.vt.pointer_state := { x; y; thrust }
+    | _ -> ()
+
+  (* Handle all events in the queue *)
+  let rec handle_events t ctx =
+    match Input.Event.get ctx with
+    | None -> ()
+    | Some event ->
+      handle t (Input.Event.get_type event);
+      Input.Event.destroy event;  (* Optional; don't bother waiting for GC *)
+      handle_events t ctx
+
+  let create ~sw =
+    let interface = Input.Interface.unix_direct in      (* todo: systemd-logind support *)
+    let udev = Input.Udev.create () in
+    let ctx = Input.Context.Udev.create interface udev in
+    Switch.on_release sw (fun () -> Input.Context.destroy ctx);
+    Input.Context.Log.set_priority ctx log_level;
+    Input.Context.Udev.assign_seat ctx "seat0";
+    ctx
+
+  let run vt ctx =
+    let t = { vt; count = Hashtbl.create 2 } in
+    Input.Context.dispatch ctx;
+    handle_events t ctx;
+    (* We could continue here and let the user plug devices in later,
+       but it's likely something has gone wrong and it's better to display
+       an error message. *)
+    if count t Pointer = 0 then failwith "No pointer devices available; giving up";
+    if count t Keyboard = 0 then failwith "No keyboard devices available; giving up";
+    let fd = Input.Context.get_fd ctx in
+    while true do
+      Eio_unix.await_readable fd;
+      Input.Context.dispatch ctx;
+      handle_events t ctx;
+    done
+end
 
 let open_device ~sw (d : Drm.Device.Info.t) =
   match d.primary_node with
@@ -127,6 +219,8 @@ let get_modifiers ~dev ~gbm plane_props =
     )
 
 let init ~sw () =
+  let ctx = In.create ~sw in
+  let pointer_state = ref { Surface.x = 0.5; y = 0.5; thrust = 0.0 } in
   let dev_fd = open_default_device ~sw () in
   let t =
     Eio_unix.Fd.use_exn "Vt.init" dev_fd @@ fun dev ->
@@ -149,19 +243,17 @@ let init ~sw () =
       enqueued_fb = None;
       flip_complete = Eio.Condition.create ();
       next_frame_due = Promise.create ();
+      pointer_state;
     }
   in
   Switch.on_release sw (fun () -> restore_fb t);
+  Fiber.fork_daemon ~sw (fun () -> In.run t ctx);
   Fiber.fork_daemon ~sw (fun () -> read_events t);
   t
 
 let device t =
   let info = Eio_unix.Fd.use_exn "Vt.device" t.dev_fd Unix.fstat in
   Drm.Dev_t.of_int64 (Int64.of_int info.st_rdev)
-
-let geometry t =
-  let mode = Option.get t.crtc.mode in
-  (mode.hdisplay, mode.vdisplay)
 
 (* Create a new Linux framebuffer from a Vulkan dmabuf.
    Typically we will have 2 or 3 framebuffers, and [attach] them in rotation. *)
@@ -299,4 +391,6 @@ let surface t =
     method vulkan_extensions =
       if t.modifiers = None then []
       else ["VK_EXT_image_drm_format_modifier"]
+
+    method pointer_state = !(t.pointer_state)
   end

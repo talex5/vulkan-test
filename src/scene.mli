@@ -5,7 +5,6 @@ type t = {
   ubo : Ubo.t Double.t;
   landscape : Landscape.t;
   ship : Ship.t;
-  mutable frame : int;
 }
 
 val create : sw:Eio.Switch.t -> format:Vkt.Format.t -> device:Vulkan.Device.t -> t

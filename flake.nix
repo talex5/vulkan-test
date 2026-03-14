@@ -1,10 +1,14 @@
 {
-  description = "Testing Vulkan";
+  description = "Testing Vulkan and libinput";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/release-25.11";
     gbm-ocaml = {
       url = "github:talex5/gbm-ocaml/main";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    libinput-ocaml = {
+      url = "github:talex5/libinput-ocaml/main";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     olivine = {
@@ -13,13 +17,14 @@
     };
   };
 
-  outputs = { self, nixpkgs, olivine, gbm-ocaml }:
+  outputs = { self, nixpkgs, olivine, gbm-ocaml, libinput-ocaml }:
   let
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
   in {
     packages.${system}.default = pkgs.callPackage (import ./default.nix) {
       gbm-ocaml = gbm-ocaml.packages.${system}.default;
+      libinput-ocaml = libinput-ocaml.packages.${system}.default;
       olivine = olivine.packages.${system}.default;
     };
 

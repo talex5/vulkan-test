@@ -44,13 +44,34 @@
         "type": "github"
       }
     },
+    "libinput-ocaml": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1774085085,
+        "narHash": "sha256-/80Qk2w95w7gXvovHOXld2VLIwNPBMhzXkeKPjeLeJI=",
+        "owner": "talex5",
+        "repo": "libinput-ocaml",
+        "rev": "c9a7ad7ebfa1852adfd23ea3e9eb26e8d87a3551",
+        "type": "github"
+      },
+      "original": {
+        "owner": "talex5",
+        "ref": "main",
+        "repo": "libinput-ocaml",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1774598844,
-        "narHash": "sha256-xmms5XM3RH8bg+9I+zQre2Bh04JFZo3DUmic6a+hDVc=",
+        "lastModified": 1774614410,
+        "narHash": "sha256-VJD143vWEZmW3Sjda8tVr1XdD5eK559VzSxtJfRrPKw=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "046e0b83d192575a70aeb47d2015aed865c3dada",
+        "rev": "288f2d26f34b0a62d43b1ec34d99a640a64a14af",
         "type": "github"
       },
       "original": {
@@ -84,6 +105,7 @@
     "root": {
       "inputs": {
         "gbm-ocaml": "gbm-ocaml",
+        "libinput-ocaml": "libinput-ocaml",
         "nixpkgs": "nixpkgs",
         "olivine": "olivine"
       }

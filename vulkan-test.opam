@@ -11,6 +11,7 @@ depends: [
   "eio_main"
   "wayland"
   "libdrm"
+  "libinput"
   "logs"
 ]
 build: [

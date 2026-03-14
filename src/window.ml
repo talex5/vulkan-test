@@ -11,6 +11,7 @@ type t = {
   wayland_dmabuf : Vulkan.Dmabuf.t;
   surface : [`V4] Wl_surface.t;
   geometry : geometry ref;
+  pointer_state : Surface.pointer_state ref;
 }
 
 exception Closed
@@ -27,9 +28,58 @@ let init ~sw transport =
     end
   in
   let linux_dmabuf = Vulkan.Dmabuf.bind reg in
-  (* Create the window: *)
+  let pointer = ref None in
+  let pointer_state = ref { Surface.x = 0.5; y = 0.5; thrust = 0.0 } in
   let scale = ref 1 in
   let geometry = ref (640, 480) in
+  let _seat = Registry.bind reg object
+      inherit [_] Wl_seat.v3
+
+      method on_capabilities t ~capabilities =
+        let has x = Int32.logand capabilities x <> 0l in
+        if has Wl_seat.Capability.pointer then (
+          let p = Wl_seat.get_pointer t object
+              inherit [_] Wl_pointer.v3
+
+              method on_frame _ = ()
+
+              method on_motion _ ~time:_ ~surface_x:x ~surface_y:y =
+                let scale = float !scale in
+                let float_of_fixed v = scale *. Float.of_int (Int32.to_int (v : Wayland.Fixed.t :> int32)) /. 256.0 in
+                let width, height = !geometry in
+                let x = float_of_fixed x /. float width in
+                let y = float_of_fixed y /. float height in
+                pointer_state := { !pointer_state with x; y }
+
+              method on_leave _ ~serial:_ ~surface:_ = ()
+              method on_enter _ ~serial:_ ~surface:_ ~surface_x:_ ~surface_y:_ = ()
+
+              method on_button _ ~serial:_ ~time:_ ~button ~state =
+                if button = 0x110l then (
+                  let thrust =
+                    match state with
+                    | Released -> 0.0
+                    | Pressed -> 1.0
+                  in
+                  pointer_state := { !pointer_state with thrust }
+                )
+
+              method on_axis_value120 _ ~axis:_ ~value120:_ = ()
+              method on_axis_stop _ ~time:_ ~axis:_ = ()
+              method on_axis_source _ ~axis_source:_ = ()
+              method on_axis_relative_direction _ ~axis:_ ~direction:_ = ()
+              method on_axis_discrete _ ~axis:_ ~discrete:_ = ()
+              method on_axis _ ~time:_ ~axis:_ ~value:_ = ()
+            end
+          in
+          Option.iter Wl_pointer.release !pointer;
+          pointer := Some p;
+        )
+
+      method on_name _ ~name:_ = ()
+    end
+  in
+  (* Create the window: *)
   let surface = Wl_compositor.create_surface compositor @@ object
       inherit [_] Wl_surface.v1
       method on_enter _ ~output:_ = ()
@@ -69,7 +119,7 @@ let init ~sw transport =
   Wl_surface.commit surface;
   Promise.await configured;
   let wayland_dmabuf = Promise.await_exn wayland_dmabuf in
-  { display; surface; wayland_dmabuf; geometry }
+  { display; surface; wayland_dmabuf; geometry; pointer_state }
 
 let attach ?buffer t =
   let surface = t.surface in
@@ -106,4 +156,6 @@ let surface t =
       (image, buffer)
 
     method vulkan_extensions = []
+
+    method pointer_state = !(t.pointer_state)
   end

@@ -4,6 +4,11 @@ open Eio.Std
 
 val size : int * int
 
+val elevation : int -> int -> float
+
+val in_pad : float -> float -> bool
+val pad_elevation : float
+
 val create_heights :
   sw:Switch.t ->
   command_pool:Vulkan.Cmd.pool ->
