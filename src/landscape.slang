@@ -5,7 +5,7 @@ layout(binding = 1) uniform Sampler2D heightSampler;
 layout(binding = 2) uniform Sampler2D tileSampler;
 
 // slang fmod and % have weird rounding
-#define mod(x, y) (x - y * floor(x / y))
+#define mod(x, y) ((x) - (y) * floor((x) / (y)))
 
 static const float deepSeaLevel = 0.1;
 static const float seaLevel = 0.2;

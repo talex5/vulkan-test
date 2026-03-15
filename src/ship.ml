@@ -163,10 +163,11 @@ let depth_testing = Vkt.Pipeline_depth_stencil_state_create_info.make ()
 
 type t = {
   state : Ubo.ship;
+  particles : Particles.t;
   draw : (Vulkan.Cmd.t -> unit) Double.t;
 }
 
-let create ~sw ~device ~ubo ~render_pass =
+let create ~sw ~device ~ubo ~render_pass ~particles =
   let state = {
     Ubo.pos = Vec3.v 15.0 15.0 6.0;
     vel = Vec3.zero;
@@ -232,7 +233,7 @@ let create ~sw ~device ~ubo ~render_pass =
           Model.record model cmd
       )
   in
-  { state; draw }
+  { state; particles; draw }
 
 let draw t side cmd =
   Double.get t.draw side cmd
@@ -267,6 +268,7 @@ let update ~(pointer : Surface.pointer_state) t =
       (-. thrust *. cos state.yaw *. sin state.pitch)
       (thrust *. cos state.pitch -. gravity)
   in
+  if pointer.thrust > 0.0 then Particles.add_thrust t.particles state;
   let drag = if on_pad then 0.9 else 0.99 in
   let vel = Vec3.(drag *. state.vel + accel) in
   let vel = if on_pad then { vel with z = max vel.z (Map.pad_elevation -. state.pos.z) } else vel in

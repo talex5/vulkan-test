@@ -1,3 +1,8 @@
+struct Particle {
+  float3 pos;
+  float brightness;
+}
+
 struct UniformBufferObject {
   float4x4 project_world;
   float4x4 ship_rot;
@@ -6,4 +11,5 @@ struct UniformBufferObject {
   float2 land_visible_nw;
   uint32_t2 land_view_size;
   uint32_t2 map_size;
+  Particle thrust[32];
 };

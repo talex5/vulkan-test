@@ -16,6 +16,8 @@ type ship = {
   mutable yaw : float;
 }
 
+let thrust_capacity = 32        (* Max number of thrust particles at once. *)
+
 (* In world coordinates, (x,y) is the position on the map and z is height.
    The x axis points right (East) and y points North, away from the viewer
    (i.e. this is a right-handled system). *)
@@ -25,6 +27,18 @@ module C = struct
     Ctypes.(view uint32_t)
       ~read:Unsigned.UInt32.to_int
       ~write:Unsigned.UInt32.of_int
+
+  module Particle = struct
+    type mark
+    type t = mark Ctypes.structure
+    let t : t Ctypes.typ = Ctypes.structure "particle"
+
+    let pos = Ctypes.field t "pos" Vec3.view
+    let brightness = Ctypes.field t "brightness" Ctypes.float
+
+    let () = Ctypes.seal t
+    let size = Ctypes.sizeof t
+  end
 
   type mark
   type t = mark Ctypes.structure
@@ -51,6 +65,10 @@ module C = struct
   let land_view_size = Ctypes.field ctype "land_view_size" Ctypes.(array 2 int_uint32_t)
 
   let map_size = Ctypes.field ctype "map_size" Ctypes.(array 2 int_uint32_t)
+
+  let _ = Ctypes.field ctype "padding" Ctypes.float
+  let _ = Ctypes.field ctype "padding" Ctypes.float
+  let thrust = Ctypes.field ctype "thrust" Ctypes.(array thrust_capacity Particle.t)
 
   let () = Ctypes.seal ctype
   let size = Ctypes.sizeof ctype
@@ -84,6 +102,8 @@ let set_ship ~ship_rot ~ship_pos t =
   let set_matrix field v = Vulkan.Matrix4x4.write v (Ctypes.getf c field) in
   set_matrix C.ship_rot ship_rot;
   set C.ship_pos ship_pos
+
+let get_thrust t = Ctypes.getf t.mapped C.thrust
 
 let create ~sw ~device =
   let buffer = Vulkan.Buffer.create ~sw device C.size
