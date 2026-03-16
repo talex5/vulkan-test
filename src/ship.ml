@@ -6,7 +6,7 @@ module Vec3 = Vulkan.Vec3
 
 let shader_code = [%blob "./ship.spv"]
 
-let gravity = 0.002
+let gravity = 0.005
 
 module Vertex = struct
   type mark
@@ -269,7 +269,7 @@ let update t (pointer : Surface.pointer_state) =
     state.yaw <- -. Float.atan2 pointer_x (-. pointer_y);
     let pitch = -. 5.0 *. Float.sqrt (pointer_x ** 2. +. pointer_y ** 2.) in
     state.pitch <- if on_pad then max (-0.3) pitch else pitch;
-    let thrust = pointer.thrust *. 0.01 in
+    let thrust = pointer.thrust *. 0.02 in
     let accel =
       Vec3.v
         (thrust *. sin state.yaw *. sin state.pitch)
@@ -277,7 +277,7 @@ let update t (pointer : Surface.pointer_state) =
         (thrust *. cos state.pitch -. gravity)
     in
     if pointer.thrust > 0.0 then Particles.add_thrust t.particles state;
-    let drag = if on_pad then 0.9 else 0.99 in
+    let drag = 1.0 -. if on_pad then 0.1 else (0.01 *. Vec3.mag state.vel ** 2.0) in
     let vel = Vec3.(drag *. state.vel + accel) in
     let vel = if on_pad then { vel with z = max vel.z (Map.pad_elevation -. state.pos.z) } else vel in
     state.vel <- vel;
