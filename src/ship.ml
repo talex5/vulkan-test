@@ -169,12 +169,15 @@ type t = {
 }
 
 let create ~sw ~device ~ubo ~render_pass ~particles =
-  let state = {
-    Ubo.pos = Vec3.v 15.0 15.0 6.0;
-    vel = Vec3.zero;
-    pitch = 0.0;
-    yaw = 0.0;
-  } in
+  let state =
+    let x, y = Map.random_start_location () in
+    let z = Map.elevation x y in
+    {
+      Ubo.pos = Vec3.v (float x) (float y) (z +. 6.0);
+      vel = Vec3.v 0.0 0.8 0.4;
+      pitch = 0.0;
+      yaw = 0.0;
+    } in
   let shader = Vulkan.Shader.load ~sw device shader_code in
   let max_sets = 2 in
   let set_layout = Vulkan.Descriptor_set.make_layout ~sw device bindings in

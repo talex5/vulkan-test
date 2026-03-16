@@ -1,6 +1,7 @@
 (* Based on https://gpfault.net/posts/perlin-noise.txt.html *)
 
-let prng =
+let randomness =
+  Random.self_init ();
   let p = Array.init 256 Fun.id in
   Array.shuffle ~rand:Random.int p;
   p
@@ -36,8 +37,8 @@ end
 (* Random fixed value for each point on a 256x256 grid. *)
 let noise2 t =
   let x, y = Vec2.to_int t in
-  let h1 = prng.(x land 0xff) in
-  prng.((h1 + y) land 0xff)
+  let h1 = randomness.(x land 0xff) in
+  randomness.((h1 + y) land 0xff)
 
 let gradients = Vec2.[|
     (x + y);

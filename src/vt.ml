@@ -220,7 +220,7 @@ let get_modifiers ~dev ~gbm plane_props =
 
 let init ~sw () =
   let ctx = In.create ~sw in
-  let pointer_state = ref { Surface.x = 0.5; y = 0.5; thrust = 0.0 } in
+  let pointer_state = ref { Surface.x = 0.5; y = 0.4; thrust = 0.0 } in
   let dev_fd = open_default_device ~sw () in
   let t =
     Eio_unix.Fd.use_exn "Vt.init" dev_fd @@ fun dev ->

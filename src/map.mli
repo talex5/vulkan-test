@@ -24,3 +24,6 @@ val create_tiles :
   device:Vulkan.Device.t ->
   Vk.Types.Image_view.t  
 (** Allocate a texture on the GPU giving the colour of each tile on the map. *)
+
+val random_start_location : unit -> int * int
+(** A random location not too near the landing pad. *)

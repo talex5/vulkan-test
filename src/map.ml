@@ -1,11 +1,11 @@
 module Vkt = Vk.Types
 module Vec3 = Vulkan.Vec3
 
-let width = 256
-let height = 256
+let width = 512
+let height = 512
 let size = (width, height)
 
-let pad_x, pad_y = (10., 10.)
+let pad_x, pad_y = (0., 0.)
 let pad_size = 10.
 let pad_elevation = 1.
 
@@ -43,6 +43,8 @@ let clamp ~min ~max v =
 
 let sea_level = 0.2
 
+let lerp a b f = a +. f *. (b -. a)
+
 (* Generate the logical heights.
    For sea, this is the height of the sea-bed.
    For volcanoes, this is before inverting. *)
@@ -66,7 +68,7 @@ let () =
               (min x (width - x))
               (min y (height - y))
           in
-          Perlin.lerp (-1.) v (float to_edge /. float edge_water_width)
+          lerp (-1.) v (float to_edge /. float edge_water_width)
         )
       in
       (* Don't waste too much of our 8 bits of height on underwater.
@@ -168,3 +170,12 @@ let tile_type x y =
   if v <= sea_level then `Sea
   else if v > lava_line then `Lava
   else `Hill
+
+let random_start_location () =
+  (* Pick a point not too near the centre, then translate to be away from the pad instead. *)
+  let cx, cy = width / 2, height / 2 in
+  let dist a b = abs (a - b) in
+  let x, y = Random.int width, Random.int height in
+  let x = if dist x cx < 64 && dist y cy < 64 then x + cx else x in
+  ((x + cx) mod width,
+   (y + cy) mod height)

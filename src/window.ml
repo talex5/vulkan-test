@@ -29,7 +29,7 @@ let init ~sw transport =
   in
   let linux_dmabuf = Vulkan.Dmabuf.bind reg in
   let pointer = ref None in
-  let pointer_state = ref { Surface.x = 0.5; y = 0.5; thrust = 0.0 } in
+  let pointer_state = ref { Surface.x = 0.5; y = 0.4; thrust = 0.0 } in
   let scale = ref 1 in
   let geometry = ref (640, 480) in
   let _seat = Registry.bind reg object
