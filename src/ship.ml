@@ -250,7 +250,7 @@ let wrap { Vec3.x; y; z } : Vec3.t =
     z;
   }
 
-let update ~(pointer : Surface.pointer_state) t =
+let update t (pointer : Surface.pointer_state) =
   let state = t.state in
   let pointer_x = pointer.x -. 0.5 in
   let pointer_y = pointer.y -. 0.5 in

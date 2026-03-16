@@ -17,4 +17,4 @@ val draw : t -> Double.side -> Vkt.Command_buffer.t -> unit
 
 val pos : t -> Vulkan.Vec3.t
 
-val update : pointer:Surface.pointer_state -> t -> unit
+val update : t -> Surface.pointer_state -> unit

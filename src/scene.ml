@@ -153,3 +153,8 @@ let draw t side cmd framebuffer =
       Ship.draw t.ship side cmd;
       Particles.draw t.particles side cmd;
     )
+
+let update t pointer =
+  Ship.update t.ship pointer
+
+let render_pass t = t.render_pass

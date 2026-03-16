@@ -20,7 +20,7 @@ let animate ~sw ~instance ~device surface : unit =
     let next_frame_due = surface#frame in
     Render.trigger_redraw render;
     Promise.await next_frame_due;
-    Ship.update render.scene.ship ~pointer:surface#pointer_state;
+    Scene.update render.scene surface#pointer_state;
   done
 
 let main ~net =

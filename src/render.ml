@@ -42,7 +42,7 @@ let create_framebuffer ~sw ~depth_buffer ~on_release t geometry =
       ~depth_buffer
       ~device:t.device
       ~format:t.surface#format
-      ~render_pass:t.scene.render_pass
+      ~render_pass:(Scene.render_pass t.scene)
   in
   let render_finished = Vulkan.Semaphore.create_export ~sw device in
   { Surface.framebuffer; buffer; render_finished; geometry }
