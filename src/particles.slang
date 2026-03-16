@@ -14,7 +14,7 @@ struct VSOutput {
 [shader("vertex")]
 VSOutput vertMain(uint vertexID : SV_VertexID) {
     VSOutput output;
-    Particle p = ubo.thrust[vertexID];
+    Particle p = ubo.particles[vertexID];
 
     // We need to handle the map wrapping. The particles will be near the ship,
     // so if they seem to be more than half a map away, treat them as negative.

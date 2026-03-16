@@ -37,7 +37,7 @@ module Thrust = struct
 
   type t = particle Queue.t
 
-  let capacity = Ubo.thrust_capacity
+  let capacity = Ubo.max_particles / 2
   let max_ttl = 50
 
   let create () = Queue.create ()

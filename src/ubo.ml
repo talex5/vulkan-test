@@ -16,7 +16,7 @@ type ship = {
   mutable yaw : float;
 }
 
-let thrust_capacity = 32        (* Max number of thrust particles at once. *)
+let max_particles = 64
 
 (* In world coordinates, (x,y) is the position on the map and z is height.
    The x axis points right (East) and y points North, away from the viewer
@@ -68,7 +68,7 @@ module C = struct
 
   let _ = Ctypes.field ctype "padding" Ctypes.float
   let _ = Ctypes.field ctype "padding" Ctypes.float
-  let thrust = Ctypes.field ctype "thrust" Ctypes.(array thrust_capacity Particle.t)
+  let particles = Ctypes.field ctype "particles" Ctypes.(array max_particles Particle.t)
 
   let () = Ctypes.seal ctype
   let size = Ctypes.sizeof ctype
@@ -103,7 +103,7 @@ let set_ship ~ship_rot ~ship_pos t =
   set_matrix C.ship_rot ship_rot;
   set C.ship_pos ship_pos
 
-let get_thrust t = Ctypes.getf t.mapped C.thrust
+let get_thrust t = Ctypes.getf t.mapped C.particles
 
 let create ~sw ~device =
   let buffer = Vulkan.Buffer.create ~sw device C.size

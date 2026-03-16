@@ -11,5 +11,5 @@ struct UniformBufferObject {
   float2 land_visible_nw;
   uint32_t2 land_view_size;
   uint32_t2 map_size;
-  Particle thrust[32];
+  Particle particles[64];
 };
