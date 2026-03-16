@@ -22,7 +22,7 @@ VSOutput vertMain(uint vertexID : SV_VertexID) {
     float4 world_pos = float4(to_ship + ubo.ship_pos.xy, p.pos.z, 1);
 
     output.pos = mul(ubo.project_world, world_pos);
-    output.colour = float3(1 * p.brightness, 0, 0);
+    output.colour = float3(1 * p.brightness, 1 * smoothstep(0.5, 1, p.brightness), 0);
     output.size = 4;
 
     return output;
