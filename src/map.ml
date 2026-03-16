@@ -162,3 +162,9 @@ let create_tiles ~sw ~command_pool ~device =
         (to_int c.x lsl 16)
     done
   done
+
+let tile_type x y =
+  let v = height_map.{truncate x, truncate y} in
+  if v <= sea_level then `Sea
+  else if v > lava_line then `Lava
+  else `Hill

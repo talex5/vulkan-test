@@ -17,4 +17,7 @@ val draw : t -> Double.side -> Vkt.Command_buffer.t -> unit
 val add_thrust : t -> Ubo.ship -> unit
 (** Add another thrust particle *)
 
+val add_explosion : t -> Vulkan.Vec3.t -> unit
+(** [add_explosion t centre] animates an explosion around [centre]. *)
+
 val update : t -> unit

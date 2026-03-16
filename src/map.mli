@@ -9,6 +9,8 @@ val elevation : int -> int -> float
 val in_pad : float -> float -> bool
 val pad_elevation : float
 
+val tile_type : float -> float -> [`Sea | `Hill | `Lava]
+
 val create_heights :
   sw:Switch.t ->
   command_pool:Vulkan.Cmd.pool ->

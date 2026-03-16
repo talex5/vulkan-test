@@ -165,6 +165,7 @@ type t = {
   state : Ubo.ship;
   particles : Particles.t;
   draw : (Vulkan.Cmd.t -> unit) Double.t;
+  mutable end_game_timer : (string * int) option;
 }
 
 let create ~sw ~device ~ubo ~render_pass ~particles =
@@ -233,10 +234,10 @@ let create ~sw ~device ~ubo ~render_pass ~particles =
           Model.record model cmd
       )
   in
-  { state; particles; draw }
+  { state; particles; draw; end_game_timer = None }
 
 let draw t side cmd =
-  Double.get t.draw side cmd
+  if t.end_game_timer = None then Double.get t.draw side cmd
 
 let wrap { Vec3.x; y; z } : Vec3.t =
   let w v max =
@@ -251,35 +252,50 @@ let wrap { Vec3.x; y; z } : Vec3.t =
   }
 
 let update t (pointer : Surface.pointer_state) =
-  let state = t.state in
-  let pointer_x = pointer.x -. 0.5 in
-  let pointer_y = pointer.y -. 0.5 in
-  let on_pad =
-    Map.in_pad state.pos.x state.pos.y &&
-    state.pos.z -. 1.0 < Map.pad_elevation
-  in
-  state.yaw <- -. Float.atan2 pointer_x (-. pointer_y);
-  let pitch = -. 5.0 *. Float.sqrt (pointer_x ** 2. +. pointer_y ** 2.) in
-  state.pitch <- if on_pad then max (-0.3) pitch else pitch;
-  let thrust = pointer.thrust *. 0.01 in
-  let accel =
-    Vec3.v
-      (thrust *. sin state.yaw *. sin state.pitch)
-      (-. thrust *. cos state.yaw *. sin state.pitch)
-      (thrust *. cos state.pitch -. gravity)
-  in
-  if pointer.thrust > 0.0 then Particles.add_thrust t.particles state;
-  let drag = if on_pad then 0.9 else 0.99 in
-  let vel = Vec3.(drag *. state.vel + accel) in
-  let vel = if on_pad then { vel with z = max vel.z (Map.pad_elevation -. state.pos.z) } else vel in
-  state.vel <- vel;
-  let pos = Vec3.(wrap (state.pos + vel)) in
-  let surface_z = Map.elevation (truncate state.pos.x) (truncate state.pos.y) in
-  if pos.z < surface_z +. 0.5 then (
-    state.pos <- { pos with z = surface_z +. 0.5 };
-    state.vel <- { state.vel with z = 0.0 };
-  ) else (
-    state.pos <- pos
-  )
+  match t.end_game_timer with
+  | Some (reason, 0) -> `Game_over reason
+  | Some (reason, i) -> t.end_game_timer <- Some (reason, i - 1); `Continue
+  | None ->
+    let state = t.state in
+    let pointer_x = pointer.x -. 0.5 in
+    let pointer_y = pointer.y -. 0.5 in
+    let on_pad =
+      Map.in_pad state.pos.x state.pos.y &&
+      state.pos.z -. 1.0 < Map.pad_elevation
+    in
+    state.yaw <- -. Float.atan2 pointer_x (-. pointer_y);
+    let pitch = -. 5.0 *. Float.sqrt (pointer_x ** 2. +. pointer_y ** 2.) in
+    state.pitch <- if on_pad then max (-0.3) pitch else pitch;
+    let thrust = pointer.thrust *. 0.01 in
+    let accel =
+      Vec3.v
+        (thrust *. sin state.yaw *. sin state.pitch)
+        (-. thrust *. cos state.yaw *. sin state.pitch)
+        (thrust *. cos state.pitch -. gravity)
+    in
+    if pointer.thrust > 0.0 then Particles.add_thrust t.particles state;
+    let drag = if on_pad then 0.9 else 0.99 in
+    let vel = Vec3.(drag *. state.vel + accel) in
+    let vel = if on_pad then { vel with z = max vel.z (Map.pad_elevation -. state.pos.z) } else vel in
+    state.vel <- vel;
+    let pos = Vec3.(wrap (state.pos + vel)) in
+    let surface_z = Map.elevation (truncate state.pos.x) (truncate state.pos.y) in
+    if pos.z < surface_z +. 0.5 then (
+      state.pos <- { pos with z = surface_z +. 0.5 };
+      state.vel <- { state.vel with z = 0.0 };
+      if not on_pad then (
+        let reason =
+          match Map.tile_type pos.x pos.y with
+          | `Sea -> "killed by calm water"
+          | `Hill -> "killed by a patch of ground"
+          | `Lava -> "killed by lava"
+        in
+        t.end_game_timer <- Some (reason, 150);
+        Particles.add_explosion t.particles state.pos;
+      )
+    ) else (
+      state.pos <- pos
+    );
+    `Continue
 
 let pos t = t.state.pos

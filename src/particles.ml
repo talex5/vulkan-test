@@ -4,6 +4,8 @@ module Vec3 = Vulkan.Vec3
 
 let shader_code = [%blob "./particles.spv"]
 
+let tau = Float.pi *. 2.
+
 let bindings = Vulkan.Binding.[
   v 0 Uniform_buffer Vkt.Shader_stage_flags.vertex;
 ]
@@ -67,9 +69,8 @@ module Thrust = struct
       Ctypes.setf slot Ubo.C.Particle.brightness (float p.ttl /. float max_ttl);
       incr i
     in
-    Queue.iter write t
-
-  let count t = Queue.length t
+    Queue.iter write t;
+    Queue.length t
 
   let update t =
     begin match Queue.peek_opt t with
@@ -82,8 +83,56 @@ module Thrust = struct
       )
 end
 
+module Explosion = struct
+  type state = {
+    centre : Vec3.t;
+    mutable ttl : int;
+  }
+
+  type t = state option ref
+
+  let n_particles = Ubo.max_particles - Thrust.capacity
+
+  let max_ttl = 100
+
+  let create () = ref None
+
+  let add t centre =
+    t := Some { centre; ttl = max_ttl }
+
+  let write t ubo ~offset =
+    match !t with
+    | None -> 0
+    | Some exp ->
+      let arr = Ubo.get_thrust ubo in
+      let time = float (max_ttl - exp.ttl) /. float max_ttl in
+      let dist = 20.0 *. time in
+      for i = 0 to n_particles - 1 do
+        let slot = A.get arr (i + offset) in
+        let ang_h = 5. *. tau *. float i /. float n_particles in
+        let ang_v = tau *. float i /. (float n_particles *. 8.) in
+        let vec =
+          Vec3.v
+            (dist *. cos ang_h *. sin ang_v)
+            (dist *. sin ang_h *. sin ang_v)
+            (dist *. sin ang_h *. cos ang_v -. 4. *. time *. time)
+        in
+        Ctypes.setf slot Ubo.C.Particle.pos Vec3.(exp.centre + vec);
+        Ctypes.setf slot Ubo.C.Particle.brightness (float exp.ttl /. float max_ttl);
+      done;
+      n_particles
+
+  let update t =
+    match !t with
+    | None -> ()
+    | Some exp ->
+      if exp.ttl = 0 then t := None
+      else exp.ttl <- exp.ttl - 1
+end
+
 type t = {
   thrust : Thrust.t;
+  explosion : Explosion.t;
   draw : (Vulkan.Cmd.t -> unit) Double.t;
 }
 
@@ -124,6 +173,7 @@ let create ~sw ~device ~ubo ~render_pass =
   in
   let descriptor_sets = Vulkan.Descriptor_set.allocate pool set_layout max_sets in
   let thrust = Thrust.create () in
+  let explosion = Explosion.create () in
   let draw =
     Double.init (fun side ->
         let descriptor_set = A.get descriptor_sets (Double.to_index side) in
@@ -132,22 +182,27 @@ let create ~sw ~device ~ubo ~render_pass =
           Vulkan.Descriptor_set.write descriptor_set Uniform_buffer [ubo.Ubo.info] ~dst_binding:0 ~dst_array_element:0;
         ];
         fun cmd ->
-          Thrust.write thrust ubo;
+          let count = Thrust.write thrust ubo in
+          let count = count + Explosion.write explosion ubo ~offset:count in
           Vulkan.Cmd.bind_pipeline cmd ~stage:Graphics pipeline;
           Vulkan.Cmd.bind_descriptor_sets cmd [descriptor_set]
             ~pipeline_bind_point:Graphics
             ~layout:pipeline_layout
             ~first_set:0;
           Vulkan.Cmd.draw cmd
-            ~first_vertex:0 ~vertex_count:(Thrust.count thrust)
+            ~first_vertex:0 ~vertex_count:count
             ~first_instance:0 ~instance_count:1
       )
   in
-  { thrust; draw }
+  { thrust; explosion; draw }
 
 let draw t side cmd =
   Double.get t.draw side cmd
 
 let add_thrust t = Thrust.add t.thrust
 
-let update t = Thrust.update t.thrust
+let add_explosion t = Explosion.add t.explosion
+
+let update t =
+  Thrust.update t.thrust;
+  Explosion.update t.explosion
