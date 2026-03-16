@@ -16,3 +16,5 @@ val draw : t -> Double.side -> Vkt.Command_buffer.t -> unit
 
 val add_thrust : t -> Ubo.ship -> unit
 (** Add another thrust particle *)
+
+val update : t -> unit

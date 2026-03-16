@@ -59,23 +59,27 @@ module Thrust = struct
     Queue.push p t
 
   let write t ubo =
-    begin match Queue.peek_opt t with
-      | Some { ttl = 0; _ } -> Queue.drop t
-      | _ -> ()
-    end;
     let arr = Ubo.get_thrust ubo in
     let i = ref 0 in
     let write p =
-      p.pos <- Vec3.(p.pos + p.vel);
       let slot = A.get arr !i in
       Ctypes.setf slot Ubo.C.Particle.pos p.pos;
       Ctypes.setf slot Ubo.C.Particle.brightness (float p.ttl /. float max_ttl);
-      p.ttl <- p.ttl - 1;
       incr i
     in
     Queue.iter write t
 
   let count t = Queue.length t
+
+  let update t =
+    begin match Queue.peek_opt t with
+      | Some { ttl = 0; _ } -> Queue.drop t
+      | _ -> ()
+    end;
+    t |> Queue.iter (fun p ->
+        p.pos <- Vec3.(p.pos + p.vel);
+        p.ttl <- p.ttl - 1;
+      )
 end
 
 type t = {
@@ -145,3 +149,5 @@ let draw t side cmd =
   Double.get t.draw side cmd
 
 let add_thrust t = Thrust.add t.thrust
+
+let update t = Thrust.update t.thrust
