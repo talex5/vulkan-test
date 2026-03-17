@@ -165,7 +165,7 @@ type t = {
   state : Ubo.ship;
   particles : Particles.t;
   draw : (Vulkan.Cmd.t -> unit) Double.t;
-  mutable end_game_timer : (string * int) option;
+  end_game_timer : (string * int) option ref;
 }
 
 let create ~sw ~device ~ubo ~render_pass ~particles =
@@ -215,6 +215,7 @@ let create ~sw ~device ~ubo ~render_pass ~particles =
   in
   let model = Model.allocate ~sw ~device in
   let descriptor_sets = Vulkan.Descriptor_set.allocate pool set_layout max_sets in
+  let end_game_timer = ref None in
   let draw =
     Double.init (fun side ->
         let descriptor_set = A.get descriptor_sets (Double.to_index side) in
@@ -223,24 +224,26 @@ let create ~sw ~device ~ubo ~render_pass ~particles =
           Vulkan.Descriptor_set.write descriptor_set Uniform_buffer [ubo.Ubo.info] ~dst_binding:0 ~dst_array_element:0;
         ];
         fun cmd ->
+          (* Note: set the ship position even if we're dead, as the other shaders need it too. *)
           Ubo.set_ship ubo
             ~ship_pos:state.pos
             ~ship_rot:Vulkan.Matrix4x4.(
                 rot_z state.yaw *
                 rot_x state.pitch
               );
-          Vulkan.Cmd.bind_pipeline cmd ~stage:Graphics pipeline;
-          Vulkan.Cmd.bind_descriptor_sets cmd [descriptor_set]
-            ~pipeline_bind_point:Graphics
-            ~layout:pipeline_layout
-            ~first_set:0;
-          Model.record model cmd
+          if !end_game_timer = None then (
+            Vulkan.Cmd.bind_pipeline cmd ~stage:Graphics pipeline;
+            Vulkan.Cmd.bind_descriptor_sets cmd [descriptor_set]
+              ~pipeline_bind_point:Graphics
+              ~layout:pipeline_layout
+              ~first_set:0;
+            Model.record model cmd
+          )
       )
   in
-  { state; particles; draw; end_game_timer = None }
+  { state; particles; draw; end_game_timer }
 
-let draw t side cmd =
-  if t.end_game_timer = None then Double.get t.draw side cmd
+let draw t side cmd = Double.get t.draw side cmd
 
 let wrap { Vec3.x; y; z } : Vec3.t =
   let w v max =
@@ -255,9 +258,9 @@ let wrap { Vec3.x; y; z } : Vec3.t =
   }
 
 let update t (pointer : Surface.pointer_state) =
-  match t.end_game_timer with
+  match !(t.end_game_timer) with
   | Some (reason, 0) -> `Game_over reason
-  | Some (reason, i) -> t.end_game_timer <- Some (reason, i - 1); `Continue
+  | Some (reason, i) -> t.end_game_timer := Some (reason, i - 1); `Continue
   | None ->
     let state = t.state in
     let pointer_x = pointer.x -. 0.5 in
@@ -293,7 +296,7 @@ let update t (pointer : Surface.pointer_state) =
           | `Hill -> "killed by a patch of ground"
           | `Lava -> "killed by lava"
         in
-        t.end_game_timer <- Some (reason, 150);
+        t.end_game_timer := Some (reason, 150);
         Particles.add_explosion t.particles state.pos;
       )
     ) else (
