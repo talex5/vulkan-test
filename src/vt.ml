@@ -29,7 +29,7 @@ let geometry t =
   (mode.hdisplay, mode.vdisplay)
 
 module In = struct
-  let log_level = Input.Context.Log.Priority.Info
+  let log_level = Input.Context.Log.Priority.Error
 
   type nonrec t = {
     vt : t;
@@ -89,24 +89,26 @@ module In = struct
       Input.Event.destroy event;  (* Optional; don't bother waiting for GC *)
       handle_events t ctx
 
-  let create ~sw =
-    let interface = Input.Interface.unix_direct in      (* todo: systemd-logind support *)
+  let run ~sw ~seat vt =
+    let interface = Seat.interface seat in
     let udev = Input.Udev.create () in
     let ctx = Input.Context.Udev.create interface udev in
     Switch.on_release sw (fun () -> Input.Context.destroy ctx);
     Input.Context.Log.set_priority ctx log_level;
     Input.Context.Udev.assign_seat ctx "seat0";
-    ctx
-
-  let run vt ctx =
     let t = { vt; count = Hashtbl.create 2 } in
     Input.Context.dispatch ctx;
     handle_events t ctx;
     (* We could continue here and let the user plug devices in later,
        but it's likely something has gone wrong and it's better to display
        an error message. *)
-    if count t Pointer = 0 then failwith "No pointer devices available; giving up";
-    if count t Keyboard = 0 then failwith "No keyboard devices available; giving up";
+    let die reason =
+      match seat with
+       | Logind _ -> failwith reason
+       | Fallback msg -> Fmt.failwith "%s (failed to use seat daemon: %s)" reason msg
+    in
+    if count t Pointer = 0 then die "No pointer devices available";
+    if count t Keyboard = 0 then die "No keyboard devices available";
     let fd = Input.Context.get_fd ctx in
     while true do
       Eio_unix.await_readable fd;
@@ -219,7 +221,7 @@ let get_modifiers ~dev ~gbm plane_props =
     )
 
 let init ~sw () =
-  let ctx = In.create ~sw in
+  let seat = Seat.connect ~sw () in
   let pointer_state = ref { Surface.x = 0.5; y = 0.4; thrust = 0.0 } in
   let dev_fd = open_default_device ~sw () in
   let t =
@@ -247,7 +249,7 @@ let init ~sw () =
     }
   in
   Switch.on_release sw (fun () -> restore_fb t);
-  Fiber.fork_daemon ~sw (fun () -> In.run t ctx);
+  Fiber.fork_daemon ~sw (fun () -> In.run ~sw ~seat t);
   Fiber.fork_daemon ~sw (fun () -> read_events t);
   t
 

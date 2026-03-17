@@ -2,7 +2,7 @@
   (name main)
   (preprocess (pps ppx_blob))
   (preprocessor_deps (file landscape.spv) (file ship.spv) (file particles.spv))
-  (libraries fmt olivine eio_main wayland wayland.protocols logs.fmt libdrm vulkan gbm libinput))
+  (libraries fmt olivine eio_main wayland wayland.protocols logs.fmt libdrm vulkan gbm libinput seat))
 
 (rule
   (target ship.spv)
