@@ -1,3 +1,13 @@
+let gravity = 0.002             (* Decrease vertical velocity by this much each frame *)
+let engine_power = 0.01         (* Increase speed by this amount (at full thrust) each frame *)
+let air_resistance = 0.01       (* Drag on the craft *)
+
+(* For a more exciting version, try increasing gravity and engine power, e.g. *)
+(*
+let gravity = 0.005
+let engine_power = 0.02
+*)
+
 open Eio.Std
 
 module Vkt = Vk.Types
@@ -5,8 +15,6 @@ module A = Vulkan.A
 module Vec3 = Vulkan.Vec3
 
 let shader_code = [%blob "./ship.spv"]
-
-let gravity = 0.005
 
 module Vertex = struct
   type mark
@@ -173,8 +181,8 @@ let create ~sw ~device ~ubo ~render_pass ~particles =
     let x, y = Map.random_start_location () in
     let z = Map.elevation x y in
     {
-      Ubo.pos = Vec3.v (float x) (float y) (z +. 6.0);
-      vel = Vec3.v 0.0 0.8 0.4;
+      Ubo.pos = Vec3.v (float x) (float y) (z +. 7.0);
+      vel = Vec3.v 0.0 0.8 (gravity *. 100.0);
       pitch = 0.0;
       yaw = 0.0;
     } in
@@ -272,7 +280,7 @@ let update t (pointer : Surface.pointer_state) =
     state.yaw <- -. Float.atan2 pointer_x (-. pointer_y);
     let pitch = -. 5.0 *. Float.sqrt (pointer_x ** 2. +. pointer_y ** 2.) in
     state.pitch <- if on_pad then max (-0.3) pitch else pitch;
-    let thrust = pointer.thrust *. 0.02 in
+    let thrust = pointer.thrust *. engine_power in
     let accel =
       Vec3.v
         (thrust *. sin state.yaw *. sin state.pitch)
@@ -280,7 +288,7 @@ let update t (pointer : Surface.pointer_state) =
         (thrust *. cos state.pitch -. gravity)
     in
     if pointer.thrust > 0.0 then Particles.add_thrust t.particles state;
-    let drag = 1.0 -. if on_pad then 0.1 else (0.01 *. Vec3.mag state.vel ** 2.0) in
+    let drag = 1.0 -. if on_pad then 0.1 else (air_resistance *. Vec3.mag state.vel ** 2.0) in
     let vel = Vec3.(drag *. state.vel + accel) in
     let vel = if on_pad then { vel with z = max vel.z (Map.pad_elevation -. state.pos.z) } else vel in
     state.vel <- vel;
