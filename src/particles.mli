@@ -14,7 +14,7 @@ val create :
 
 val draw : t -> Double.side -> Vkt.Command_buffer.t -> unit
 
-val add_thrust : t -> Ubo.ship -> unit
+val add_thrust : t -> Ubo.ship -> float -> unit
 (** Add another thrust particle *)
 
 val add_explosion : t -> Vulkan.Vec3.t -> unit

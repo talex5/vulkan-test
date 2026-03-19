@@ -287,7 +287,7 @@ let update t (pointer : Surface.pointer_state) =
         (-. thrust *. cos state.yaw *. sin state.pitch)
         (thrust *. cos state.pitch -. gravity)
     in
-    if pointer.thrust > 0.0 then Particles.add_thrust t.particles state;
+    if pointer.thrust > 0.0 then Particles.add_thrust t.particles state pointer.thrust;
     let drag = 1.0 -. if on_pad then 0.1 else (air_resistance *. Vec3.mag state.vel ** 2.0) in
     let vel = Vec3.(drag *. state.vel + accel) in
     let vel = if on_pad then { vel with z = max vel.z (Map.pad_elevation -. state.pos.z) } else vel in

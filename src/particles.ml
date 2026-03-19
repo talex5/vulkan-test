@@ -44,9 +44,9 @@ module Thrust = struct
 
   let create () = Queue.create ()
 
-  let add t (ship : Ubo.ship) =
+  let add t (ship : Ubo.ship) thrust =
     if Queue.length t = capacity then Queue.drop t;
-    let speed = 0.5 in
+    let speed = 0.5 *. thrust in
     let pitch = ship.pitch +. (Random.float 0.5 -. 0.25) in
     let yaw = ship.yaw +. (Random.float 0.5 -. 0.25) in
     let vel =
