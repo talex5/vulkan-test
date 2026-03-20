@@ -26,11 +26,16 @@ let animate ~sw ~instance ~device surface =
   in
   run_game_loop ()
 
+let env_set x =
+  match Sys.getenv_opt x with
+  | None | Some "" -> false
+  | Some _ -> true
+
 let main ~net =
   Switch.run @@ fun sw ->
   let instance = Vulkan.Instance.create ~sw ~validation_layers app_info in
   let animate = animate ~sw ~instance in
-  if Sys.getenv_opt "WAYLAND_DISPLAY" <> None then (
+  if env_set "WAYLAND_DISPLAY" then (
     let transport = Wayland.Unix_transport.connect ~sw ~net () in
     let window = Window.init ~sw transport in
     let device = window.wayland_dmabuf.main_device in
@@ -38,6 +43,8 @@ let main ~net =
     let exit_reason = animate ~device (Window.surface window) in
     Window.destroy window;
     exit_reason
+  ) else if env_set "DISPLAY" then (
+    failwith "X11 is not supported; run under Wayland or from a text console ($DISPLAY is set)"
   ) else (
     Ctrl_c.install_signal_handler sw;
     let vt = Vt.init ~sw () in
