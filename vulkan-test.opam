@@ -13,6 +13,7 @@ depends: [
   "libdrm"
   "libinput"
   "logs"
+  "obus" {>= "1.2.5"}
 ]
 build: [
   ["dune" "subst"] {dev}
