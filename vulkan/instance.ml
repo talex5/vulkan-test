@@ -58,7 +58,13 @@ let find_device instance wayland_device =
       else if primary drm_props = wayland_device then found := Some (i, "primary")
     );
   match !found with
-  | None -> failwith "GPU device not found"
   | Some (i, x) ->
     Log.debug (fun f -> f "Using device %d (matches requested %s node)" i x);
     A.get physical_devices i
+  | None ->
+    (* On the Raspberry Pi 4, there are two graphics devices.
+       card0 does rendering but not output, while card0 does output but not rendering.
+       Raspbian's compositor tells us it's using card1, but this isn't a Vulkan device.
+       So, just pick the first device if we can't find what we're looking for. *)
+    if physical_devices.alength > 0 then A.get physical_devices 0
+    else failwith "No GPU devices found"
