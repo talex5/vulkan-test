@@ -7,7 +7,6 @@ let vk_format = Vkt.Format.B8g8r8a8_srgb
 let pixel_format = Drm.Fourcc.xr24
 
 type fb = {
-  fb : K.Fb.id;
   on_release : unit -> unit;
 }
 
@@ -95,6 +94,19 @@ let or_fail msg = function
   | None -> failwith msg
   | Some x -> x
 
+let find_primary_plane ~dev ~crtc_id =
+  K.Plane.list dev
+  |> List.find_map (fun id ->
+      let ( let* ) = Option.bind in
+      let props = K.Plane.get_properties dev id in
+      let get k = K.Properties.Values.get_value props k in
+      let* plane_crtc_id = get K.Plane.crtc_id in
+      let* typ = get K.Plane.typ in
+      if plane_crtc_id = Some crtc_id && typ = `Primary then Some props
+      else None
+    )
+  |> or_fail "No suitable KMS plane found!"
+
 let init ~sw () =
   let dev_fd = open_default_device ~sw () in
   let t =
@@ -103,24 +115,12 @@ let init ~sw () =
     Drm.Client_cap.(set_exn atomic) dev true;    (* Enable modern features *)
     let conn = find_connector dev in
     let crtc = get_crtc dev conn in
-    let plane =
-      K.Plane.list dev
-      |> List.find_map (fun id ->
-          let ( let* ) = Option.bind in
-          let props = K.Plane.get_properties dev id in
-          let get k = K.Properties.Values.get_value props k in
-          let* crtc_id = get K.Plane.crtc_id in
-          let* typ = get K.Plane.typ in
-          if crtc_id = Some crtc.crtc_id && typ = `Primary then Some props.metadata
-          else None
-        )
-      |> or_fail "No suitable KMS plane found!"
-    in
+    let plane_props = find_primary_plane ~dev ~crtc_id:crtc.crtc_id in
     {
       dev_fd;
       crtc;
       conn = K.Connector.id conn;
-      plane;
+      plane = plane_props.metadata;
       front_fb = None;
       enqueued_fb = None;
       flip_complete = Eio.Condition.create ();
@@ -141,7 +141,7 @@ let geometry t =
 
 (* Create a new Linux framebuffer from a Vulkan dmabuf.
    Typically we will have 2 or 3 framebuffers, and [attach] them in rotation. *)
-let import ~sw ~on_release t { Vulkan.Swap_chain.offset; stride; fd; geometry; drm_format } =
+let import ~sw t { Vulkan.Swap_chain.offset; stride; fd; geometry; drm_format } =
   let fb =
     Eio_unix.Fd.use_exn "Vt.import" t.dev_fd @@ fun dev ->
     let handle = Eio_unix.Fd.use_exn "Dmabuf.to_handle" fd (Drm.Dmabuf.to_handle dev) in
@@ -156,21 +156,21 @@ let import ~sw ~on_release t { Vulkan.Swap_chain.offset; stride; fd; geometry; d
          In our case, this avoids turning the screen off briefly before [restore_fb] does its job. *)
       K.Fb.close dev fb
     );
-  { fb; on_release }
+  fb
 
-let attach t buffer =
+let attach ~on_release t fb =
   while t.enqueued_fb <> None do
     Log.info (fun f -> f "Wait for previous frame to be displayed before enqueuing another");
     Eio.Condition.await_no_mutex t.flip_complete
   done;
-  Log.info (fun f -> f "Enqueue framebuffer %a" Drm.Id.pp buffer.fb);
+  Log.info (fun f -> f "Enqueue framebuffer %a" Drm.Id.pp fb);
   Eio_unix.Fd.use_exn "Vt.attach" t.dev_fd (fun dev ->
       let rq = K.Atomic_req.create () in
       let ( .%{}<- ) obj k v = K.Atomic_req.add_property rq obj k v in
-      t.plane.%{ K.Plane.fb_id } <- Some buffer.fb;
+      t.plane.%{ K.Plane.fb_id } <- Some fb;
       K.Atomic_req.commit dev rq ~page_flip_event:0n;
     );
-  t.enqueued_fb <- Some buffer;
+  t.enqueued_fb <- Some { on_release };
   (* This is probably a good time to start rendering another frame. *)
   ignore (Promise.try_resolve (snd t.next_frame_due) () : bool)
 
@@ -189,10 +189,10 @@ let surface t =
     method create_image ~sw ~device ~on_release geometry =
       let drm_format = Vulkan.Drm_format.v pixel_format ~modifier:Drm.Modifier.reserved in
       let image, dmabuf = Surface.create_image ~sw ~device ~format:vk_format ~drm_format geometry in
-      let fb = import ~sw ~on_release t dmabuf in
+      let fb = import ~sw t dmabuf in
       let buffer =
         object
-          method attach = attach t fb
+          method attach = attach ~on_release t fb
           method dma_buf_fd = dmabuf.fd
         end
       in
