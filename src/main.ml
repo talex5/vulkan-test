@@ -1,6 +1,10 @@
 open Eio.Std
 
-let validation = false
+let validation =
+  match Sys.getenv_opt "VK_VALIDATION" with
+  | None | Some "" | Some "0" -> false
+  | Some _ -> true
+
 let validation_layers = if validation then ["VK_LAYER_KHRONOS_validation"] else []
 
 let app_info = Vulkan.Instance.application_info "vulkan-test-ocaml" ~version:(1,0,0)
