@@ -1,9 +1,14 @@
 open Common
 
+let int_of_unix (fd : Unix.file_descr) : int = Obj.magic fd
+
 module type EXT = sig
   val import_semaphore_fd_khr : Vkt.Import_semaphore_fd_info_khr.t -> unit
   val get_semaphore_fd_khr : Vkt.Semaphore_get_fd_info_khr.t -> int
   val get_memory_fd_khr : Vkt.Memory_get_fd_info_khr.t -> int
+  val get_memory_fd_properties_khr :
+    handle_type:Vkt.External_memory_handle_type_flags.index -> int ->
+    Vkt.Memory_fd_properties_khr.t
 end
 
 module Ext(Device : sig val x : Vkt.Device.t end) : EXT = struct
@@ -18,6 +23,9 @@ module Ext(Device : sig val x : Vkt.Device.t end) : EXT = struct
 
   let get_memory_fd_khr get_fd_info =
     External_memory_fd.get_memory_fd_khr ~get_fd_info <?> "get_memory_fd_khr"
+
+  let get_memory_fd_properties_khr ~handle_type fd =
+    External_memory_fd.get_memory_fd_properties_khr ~handle_type fd <?> "get_memory_fd_properties_khr"
 end
 
 type t = {
@@ -70,6 +78,11 @@ let create ~sw ?(extensions=[]) physical_device =
   let ext = (module Ext(struct let x = device end) : EXT) in
   let memory_properties = Vkc.get_physical_device_memory_properties physical_device in
   { device; graphics_family; graphics_queue; ext; memory_properties }
+
+let get_memory_fd_properties_khr t ~handle_type fd =
+  let (module E : EXT) = t.ext in
+  Eio_unix.Fd.use_exn "get_memory_fd_properties_khr" fd @@ fun fd ->
+  E.get_memory_fd_properties_khr ~handle_type (int_of_unix fd)
 
 let find_memory_type t ~type_filter ~properties =
   let memory_properties = t.memory_properties in
