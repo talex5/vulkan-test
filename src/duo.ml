@@ -34,7 +34,7 @@ let submit t (fb : Surface.framebuffer) command_buffer =
 
   (* Get the semaphore that the compositor's render job will signal when
      it's done reading the image: *)
-  Vulkan.Semaphore.import device fb.dma_buf_fd t.image_available;
+  Vulkan.Semaphore.import device fb.buffer#dma_buf_fd t.image_available;
 
   Vulkan.Cmd.submit device command_buffer
     ~wait:[t.image_available, Vkt.Pipeline_stage_flags.color_attachment_output]
@@ -43,4 +43,4 @@ let submit t (fb : Surface.framebuffer) command_buffer =
 
   (* Attach [render_finished] to the dmabuf so that the compositor doesn't
      start displaying the image until the GPU has finished rendering it. *)
-  Vulkan.Semaphore.export device fb.render_finished fb.dma_buf_fd
+  Vulkan.Semaphore.export device fb.render_finished fb.buffer#dma_buf_fd

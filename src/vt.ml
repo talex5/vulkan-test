@@ -181,10 +181,16 @@ let surface t =
     method geometry = geometry t
     method frame = frame t
 
-    method create_image ~sw ~device geometry =
-      Surface.create_image ~sw ~device ~format:B8g8r8a8_srgb geometry
+    method create_image ~sw ~device ~on_release geometry =
+      let image, dmabuf = Surface.create_image ~sw ~device ~format:B8g8r8a8_srgb geometry in
+      let fb = import ~sw ~on_release t dmabuf in
+      let buffer =
+        object
+          method attach = attach t fb
+          method dma_buf_fd = dmabuf.fd
+        end
+      in
+      (image, buffer)
 
-    method import_buffer ~sw ~on_release dmabuf =
-      let buffer = import ~sw ~on_release t dmabuf in
-      object method attach = attach t buffer end
+    method vulkan_extensions = []
   end

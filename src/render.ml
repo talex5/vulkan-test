@@ -36,12 +36,7 @@ let next_as_promise cond =
 
 let create_framebuffer ~sw ~depth_buffer ~on_release t geometry =
   let device = t.device in
-  let image = t.surface#create_image ~sw ~device geometry in
-  let memory = Vulkan.Image.allocate_image_memory ~sw ~device image
-      ~handle_types:Vkt.External_memory_handle_type_flags.opaque_fd
-      ~properties:Vkt.Memory_property_flags.device_local
-  in
-  let layout = Vulkan.Image.get_layout ~device image in
+  let image, buffer = t.surface#create_image ~sw ~device ~on_release geometry in
   let framebuffer =
     Vulkan.Image.create_framebuffer ~sw geometry image
       ~depth_buffer
@@ -50,15 +45,7 @@ let create_framebuffer ~sw ~depth_buffer ~on_release t geometry =
       ~render_pass:t.scene.render_pass
   in
   let render_finished = Vulkan.Semaphore.create_export ~sw device in
-  let dmabuf = { Vulkan.Swap_chain.
-    geometry;
-    offset = Vkt.Device_size.to_int (Vkt.Subresource_layout.offset layout);
-    stride = Vkt.Device_size.to_int (Vkt.Subresource_layout.row_pitch layout);
-    fd = Vulkan.Image.get_memory_fd ~sw device memory;
-  } in
-  let rec buffer = lazy (t.surface#import_buffer ~sw ~on_release dmabuf)
-  and frame = lazy Surface.{ framebuffer; buffer = Lazy.force buffer; render_finished; dma_buf_fd = dmabuf.fd; geometry } in
-  Lazy.force frame
+  { Surface.framebuffer; buffer; render_finished; geometry }
 
 let create_swapchain ~sw t geometry =
   let depth_buffer = create_depth_buffer ~sw t geometry in
