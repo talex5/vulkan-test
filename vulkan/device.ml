@@ -44,7 +44,7 @@ let find_graphics_family physical_device =
     Log.debug (fun f -> f "Found graphics queue family (%d)" i);
     i
 
-let create ~sw physical_device =
+let create ~sw ?(extensions=[]) physical_device =
   (* Create logical device with one graphics queue *)
   let graphics_family = find_graphics_family physical_device in
   let queue_create_infos =
@@ -53,7 +53,7 @@ let create ~sw physical_device =
         ~queue_family_index:graphics_family
         ~queue_priorities:(float_array [1.0])
     ] in
-  let enabled_extension_names = string_array [
+  let enabled_extension_names = string_array ([
       (* Export image FD so we can send it to the compositor *)
       "VK_KHR_external_memory";
       "VK_KHR_external_memory_fd";
@@ -61,8 +61,8 @@ let create ~sw physical_device =
       (* Export semaphores to synchronise with the compositor *)
       "VK_KHR_external_semaphore";
       "VK_KHR_external_semaphore_fd";
-      "VK_KHR_shader_draw_parameters";
-    ] in
+    ] @ extensions)
+  in
   let create_info = Vkt.Device_create_info.make ~queue_create_infos ~enabled_extension_names () in
   let device = Vkc.create_device () ~physical_device ~create_info <?> "create_device" in
   Switch.on_release sw (fun () -> Vkc.destroy_device (Some device) None);
