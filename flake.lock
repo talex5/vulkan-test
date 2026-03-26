@@ -39,18 +39,41 @@
         "type": "github"
       }
     },
-    "libdrm-ocaml": {
+    "gbm-ocaml": {
       "inputs": {
+        "libdrm-ocaml": "libdrm-ocaml",
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1763309706,
-        "narHash": "sha256-Q9EMk3L8abXdz//RZwetIe9qc/LFRejMnZUNR0QrAOc=",
+        "lastModified": 1774604058,
+        "narHash": "sha256-hn+XQ3796igiDtZJKdvq6bUojQs234g83Abx1nSuj60=",
+        "owner": "talex5",
+        "repo": "gbm-ocaml",
+        "rev": "5c4b2a7cc1b4def5ba44c4ca84ca40115c414844",
+        "type": "github"
+      },
+      "original": {
+        "owner": "talex5",
+        "ref": "main",
+        "repo": "gbm-ocaml",
+        "type": "github"
+      }
+    },
+    "libdrm-ocaml": {
+      "inputs": {
+        "nixpkgs": [
+          "gbm-ocaml",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1774603778,
+        "narHash": "sha256-/v+Tx8oyE5vVfnFOYIabjJXDfmPatII71VUSChO1KNE=",
         "owner": "talex5",
         "repo": "libdrm-ocaml",
-        "rev": "1245a15af77fd595d66ac0dd16b672db097877c1",
+        "rev": "544346b60de99f60a16f0f7b35e16f250839f073",
         "type": "github"
       },
       "original": {
@@ -62,11 +85,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1772907012,
-        "narHash": "sha256-RaURINw5Bt39/be0DouuVD4g2RUx7BYJHonX8UWx3nw=",
+        "lastModified": 1774598844,
+        "narHash": "sha256-xmms5XM3RH8bg+9I+zQre2Bh04JFZo3DUmic6a+hDVc=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "72d811454c106021f8475437057643e3e3f70bf1",
+        "rev": "046e0b83d192575a70aeb47d2015aed865c3dada",
         "type": "github"
       },
       "original": {
@@ -83,11 +106,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1771769785,
-        "narHash": "sha256-37frn9Bdt2u5LgMePejaPhwI9gz+oCL31lrKlin7PP0=",
+        "lastModified": 1774111372,
+        "narHash": "sha256-O+B0qbp2YZ9ngWrzCuSe4XEsTW2NY/0H0FcroHdVysQ=",
         "owner": "talex5",
         "repo": "olivine",
-        "rev": "19e543d5f520a044c3b0e714112f025825b6195c",
+        "rev": "e40fba89dcd28f86da393a15f2b39f98ab5e35fe",
         "type": "github"
       },
       "original": {
@@ -100,7 +123,7 @@
     "root": {
       "inputs": {
         "eio-trace": "eio-trace",
-        "libdrm-ocaml": "libdrm-ocaml",
+        "gbm-ocaml": "gbm-ocaml",
         "nixpkgs": "nixpkgs",
         "olivine": "olivine"
       }

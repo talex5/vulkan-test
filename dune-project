@@ -1,2 +1,1 @@
-(lang dune 3.0)
-(name vulkan-test)
+(lang dune 3.19)

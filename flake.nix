@@ -3,8 +3,8 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/release-25.11";
-    libdrm-ocaml = {
-      url = "github:talex5/libdrm-ocaml/main";
+    gbm-ocaml = {
+      url = "github:talex5/gbm-ocaml/main";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     olivine = {
@@ -17,13 +17,13 @@
     };
   };
 
-  outputs = { self, nixpkgs, eio-trace, olivine, libdrm-ocaml }:
+  outputs = { self, nixpkgs, eio-trace, olivine, gbm-ocaml }:
   let
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
   in {
     packages.${system}.default = pkgs.callPackage (import ./default.nix) {
-      libdrm-ocaml = libdrm-ocaml.packages.${system}.default;
+      gbm-ocaml = gbm-ocaml.packages.${system}.default;
       olivine = olivine.packages.${system}.default;
     };
 

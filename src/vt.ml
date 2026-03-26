@@ -12,6 +12,8 @@ type fb = {
 
 type t = {
   dev_fd : Eio_unix.Fd.t;
+  gbm : Gbm.Device.t;
+  modifiers : Drm.Modifier.t list option;
   crtc : K.Crtc.t;
   conn : K.Connector.id;
   plane : [`Plane] K.Properties.metadata;
@@ -107,17 +109,39 @@ let find_primary_plane ~dev ~crtc_id =
     )
   |> or_fail "No suitable KMS plane found!"
 
+(* Get the list of modifiers supported by both us and the plane.
+   [None] if the device doesn't support modifiers. *)
+let get_modifiers ~dev ~gbm plane_props =
+  let plane_count = Gbm.Device.get_format_modifier_plane_count gbm pixel_format in
+  K.Properties.Values.get_value plane_props K.Plane.in_formats
+  |> Option.map (fun blob_id ->
+      let modifiers =
+        K.Plane.get_in_formats dev blob_id
+        |> List.filter_map (fun (f, m) ->
+            if f = pixel_format && plane_count m = 1 then Some m else None
+          )
+      in
+      Log.info (fun f -> f "Filtered modifiers %a" (Fmt.Dump.list Drm.Modifier.pp) modifiers);
+      if modifiers = [] then failwith "No usable modifiers!";
+      modifiers
+    )
+
 let init ~sw () =
   let dev_fd = open_default_device ~sw () in
   let t =
     Eio_unix.Fd.use_exn "Vt.init" dev_fd @@ fun dev ->
     Log.info (fun f -> f "Driver version: %a" Drm.Device.Version.pp (Drm.Device.Version.get dev));
     Drm.Client_cap.(set_exn atomic) dev true;    (* Enable modern features *)
+    let gbm = Gbm.Device.create dev in
+    Switch.on_release sw (fun () -> Gbm.Device.destroy gbm);
     let conn = find_connector dev in
     let crtc = get_crtc dev conn in
     let plane_props = find_primary_plane ~dev ~crtc_id:crtc.crtc_id in
+    let modifiers = get_modifiers ~dev ~gbm plane_props in
     {
       dev_fd;
+      gbm;
+      modifiers;
       crtc;
       conn = K.Connector.id conn;
       plane = plane_props.metadata;
@@ -144,11 +168,23 @@ let geometry t =
 let import ~sw t { Vulkan.Swap_chain.offset; stride; fd; geometry; drm_format } =
   let fb =
     Eio_unix.Fd.use_exn "Vt.import" t.dev_fd @@ fun dev ->
-    let handle = Eio_unix.Fd.use_exn "Dmabuf.to_handle" fd (Drm.Dmabuf.to_handle dev) in
-    Fun.protect ~finally:(fun () -> Drm.Buffer.close dev handle) @@ fun () ->
-    let planes = [{ K.Fb.Plane.handle; offset; pitch = stride }] in
-    K.Fb.add dev ~size:geometry ~pixel_format:drm_format.code ~planes
-      ?modifier:(Vulkan.Drm_format.get_modifier_opt drm_format)
+    let bo = Eio_unix.Fd.use_exn "Bo.import" fd (fun fd ->
+        let plane = { Gbm.Bo.fd; stride; offset } in
+        let modifier = drm_format.modifier in
+        let width, height = geometry in
+        Gbm.Bo.import t.gbm ~flags:Gbm.Bo.Flags.use_scanout (
+          Fd { width; height; format = drm_format.code; modifier; planes = [plane] }
+        )
+      )
+    in
+    match bo with
+    | Error e -> raise (Unix.Unix_error (e, "Gbm.Bo.import", ""))
+    | Ok bo ->
+      Fun.protect ~finally:(fun () -> Gbm.Bo.destroy bo) @@ fun () ->
+      let handle = Gbm.Bo.get_handle bo in
+      let planes = [{ K.Fb.Plane.handle; offset; pitch = stride }] in
+      K.Fb.add dev ~size:geometry ~pixel_format:drm_format.code ~planes
+        ?modifier:(Vulkan.Drm_format.get_modifier_opt drm_format)
   in
   Switch.on_release sw (fun () ->
       Eio_unix.Fd.use_exn "Vt.import.release" t.dev_fd @@ fun dev ->
@@ -180,6 +216,28 @@ let frame t =
   );
   fst t.next_frame_due
 
+let create_framebuffer_with_modifiers ~sw ~modifiers t (width, height) =
+  (* In theory, GBM should create an image large enough for rendering.
+     By on rpi4, it needs to be a bit larger (V3D_TFU_READAHEAD_SIZE), so add an extra row. *)
+  let geometry_with_margin = (width, height + 1) in
+  let flags = Gbm.Bo.Flags.(use_scanout + use_rendering) in
+  let bo = Gbm.Bo.create_exn ~flags t.gbm ~format:pixel_format geometry_with_margin ~modifiers in
+  let offset = Gbm.Bo.get_offset bo 0 in
+  let stride = Gbm.Bo.get_stride_for_plane bo 0 in
+  let modifier = Gbm.Bo.get_modifier bo in
+  let plane_count = Gbm.Bo.get_plane_count bo in
+  Log.info (fun f -> f "GBM selected modifier %a (%d planes)@." Drm.Modifier.pp modifier plane_count);
+  assert (Gbm.Bo.get_plane_count bo = 1);
+  let fd = Eio_unix.Fd.of_unix ~sw ~close_unix:true (Gbm.Bo.get_fd bo) in
+  Gbm.Bo.destroy bo;
+  { Vulkan.Swap_chain.
+    geometry = (width, height);
+    offset;
+    stride;
+    fd;
+    drm_format = Vulkan.Drm_format.v pixel_format ~modifier;
+  }
+
 let surface t =
   object (_ : Surface.t)
     method format = vk_format
@@ -187,8 +245,43 @@ let surface t =
     method frame = frame t
 
     method create_image ~sw ~device ~on_release geometry =
-      let drm_format = Vulkan.Drm_format.v pixel_format ~modifier:Drm.Modifier.reserved in
-      let image, dmabuf = Surface.create_image ~sw ~device ~format:vk_format ~drm_format geometry in
+      let image, dmabuf =
+        match t.modifiers with
+        | None ->
+          let drm_format = Vulkan.Drm_format.v pixel_format ~modifier:Drm.Modifier.reserved in
+          Surface.create_image ~sw ~device ~format:vk_format ~drm_format geometry
+        | Some modifiers ->
+          let handle_type = Vkt.External_memory_handle_type_flags.dma_buf_ext in
+          let dmabuf = create_framebuffer_with_modifiers ~sw ~modifiers t geometry in
+          let image =
+            let (width, height) = geometry in
+            let drm_info =
+              Vulkan.Drm_format.get_modifier_opt dmabuf.drm_format
+              |> Option.map (fun m ->
+                let plane =
+                  Vkt.Subresource_layout.make
+                    ~offset:(Vkt.Device_size.of_int dmabuf.offset)
+                    ~row_pitch:(Vkt.Device_size.of_int dmabuf.stride)
+                    ~size:Vkt.Device_size.zero (* Vulkan spec says this is ignored *)
+                    ~array_pitch:Vkt.Device_size.zero
+                    ~depth_pitch:Vkt.Device_size.zero
+                in
+                (m, [plane])
+              ) in
+            Vulkan.Image.create ~sw device
+              ~format:vk_format
+              ~extent:(Vkt.Extent_3d.make ~width ~height ~depth:1)
+              ~usage:Vkt.Image_usage_flags.color_attachment
+              ~sharing_mode:Exclusive
+              ~initial_layout:Undefined
+              ~flags:Vkt.Image_create_flags.alias
+              ~tiling:Drm_format_modifier_ext
+              ~handle_types:handle_type
+              ?drm_info
+          in
+          Vulkan.Image.import_memory_fd ~sw ~device image dmabuf.fd;
+          image, dmabuf
+      in
       let fb = import ~sw t dmabuf in
       let buffer =
         object
@@ -198,5 +291,7 @@ let surface t =
       in
       (image, buffer)
 
-    method vulkan_extensions = []
+    method vulkan_extensions =
+      if t.modifiers = None then []
+      else ["VK_EXT_image_drm_format_modifier"]
   end

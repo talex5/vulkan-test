@@ -6,6 +6,7 @@ depends: [
   "dune" {>= "3.16"}
   "ocaml" {>= "5.4"}
   "olivine"
+  "gbm"
   "ppx_blob"
   "eio_main"
   "wayland"
@@ -25,4 +26,6 @@ build: [
 ]
 pin-depends: [
   ["olivine.dev" "git+https://github.com/talex5/olivine.git#59b3f56cee831905db21039f11991a5c36226d4d"]
+  ["gbm.dev" "git+https://github.com/talex5/gbm-ocaml.git#88f6796121a920e9977a903326d154b4bc935721"]
+  ["libdrm.dev" "git+https://github.com/talex5/libdrm-ocaml.git#544346b60de99f60a16f0f7b35e16f250839f073"]
 ]
