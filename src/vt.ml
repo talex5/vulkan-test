@@ -11,6 +11,7 @@ type t = {
   dev_fd : Eio_unix.Fd.t;
   crtc : K.Crtc.t;
   conn : K.Connector.id;
+  plane : [`Plane] K.Properties.metadata;
   mutable front_fb : fb option;             (* Currently visible, last time we checked *)
   mutable enqueued_fb : fb option;          (* Enqueued to become visible (and possibly already is; confirmation pending) *)
   flip_complete : Eio.Condition.t;          (* [enqueued_fb] has become [None]. *)
@@ -86,6 +87,10 @@ let restore_fb t =
     ~pos:(crtc.x, crtc.y)
     ~connectors:[t.conn]
 
+let or_fail msg = function
+  | None -> failwith msg
+  | Some x -> x
+
 let init ~sw () =
   let dev_fd = open_default_device ~sw () in
   let t =
@@ -94,10 +99,24 @@ let init ~sw () =
     Drm.Client_cap.(set_exn atomic) dev true;    (* Enable modern features *)
     let conn = find_connector dev in
     let crtc = get_crtc dev conn in
+    let plane =
+      K.Plane.list dev
+      |> List.find_map (fun id ->
+          let ( let* ) = Option.bind in
+          let props = K.Plane.get_properties dev id in
+          let get k = K.Properties.Values.get_value props k in
+          let* crtc_id = get K.Plane.crtc_id in
+          let* typ = get K.Plane.typ in
+          if crtc_id = Some crtc.crtc_id && typ = `Primary then Some props.metadata
+          else None
+        )
+      |> or_fail "No suitable KMS plane found!"
+    in
     {
       dev_fd;
       crtc;
       conn = K.Connector.id conn;
+      plane;
       front_fb = None;
       enqueued_fb = None;
       flip_complete = Eio.Condition.create ();
@@ -141,7 +160,10 @@ let attach t buffer =
   done;
   Log.info (fun f -> f "Enqueue framebuffer %a" Drm.Id.pp buffer.fb);
   Eio_unix.Fd.use_exn "Vt.attach" t.dev_fd (fun dev ->
-      K.Crtc.page_flip dev t.crtc.crtc_id buffer.fb ~event:0n;
+      let rq = K.Atomic_req.create () in
+      let ( .%{}<- ) obj k v = K.Atomic_req.add_property rq obj k v in
+      t.plane.%{ K.Plane.fb_id } <- Some buffer.fb;
+      K.Atomic_req.commit dev rq ~page_flip_event:0n;
     );
   t.enqueued_fb <- Some buffer;
   (* This is probably a good time to start rendering another frame. *)
