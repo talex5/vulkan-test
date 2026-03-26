@@ -1,7 +1,7 @@
 module Vkt = Vk.Types
 
 (* Default image creation, without modifiers or external memory. *)
-let create_image ~sw ~device ~format (width, height) =
+let create_image ~sw ~device ~format ~drm_format (width, height) =
   let image =
     Vulkan.Image.create device ~sw
     ~format
@@ -23,6 +23,7 @@ let create_image ~sw ~device ~format (width, height) =
     offset = Vkt.Device_size.to_int (Vkt.Subresource_layout.offset layout);
     stride = Vkt.Device_size.to_int (Vkt.Subresource_layout.row_pitch layout);
     fd = Vulkan.Image.get_memory_fd ~sw device memory;
+    drm_format;
   } in
   image, dmabuf
 

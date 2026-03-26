@@ -94,13 +94,9 @@ let surface t =
     method frame = frame t
 
     method create_image ~sw ~device ~on_release geometry =
-      let image, dmabuf = Surface.create_image ~sw ~device ~format:B8g8r8a8_srgb geometry in
-      let { Vulkan.Swap_chain.geometry; offset; stride; fd } = dmabuf in
-      let wayland_buffer =
-        Vulkan.Dmabuf.create_buffer t.wayland_dmabuf ~sw ~on_release ~fd geometry
-          ~offset:(Int32.of_int offset)
-          ~stride:(Int32.of_int stride)
-      in
+      let drm_format = t.wayland_dmabuf.drm_format in
+      let image, dmabuf = Surface.create_image ~sw ~device ~format:B8g8r8a8_srgb ~drm_format geometry in
+      let wayland_buffer = Vulkan.Dmabuf.create_buffer t.wayland_dmabuf ~sw ~on_release dmabuf in
       let buffer =
         object
           method attach = attach t ~buffer:wayland_buffer

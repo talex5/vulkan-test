@@ -8,6 +8,7 @@ type dmabuf = {
   offset : int;
   stride : int;
   fd : Eio_unix.Fd.t;
+  drm_format : Drm_format.t;
 }
 
 let create create_frame =

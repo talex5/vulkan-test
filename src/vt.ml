@@ -1,6 +1,10 @@
 open Eio.Std
 
+module Vkt = Vk.Types
 module K = Drm.Kms
+
+let vk_format = Vkt.Format.B8g8r8a8_srgb
+let pixel_format = Drm.Fourcc.xr24
 
 type fb = {
   fb : K.Fb.id;
@@ -137,13 +141,14 @@ let geometry t =
 
 (* Create a new Linux framebuffer from a Vulkan dmabuf.
    Typically we will have 2 or 3 framebuffers, and [attach] them in rotation. *)
-let import ~sw ~on_release t { Vulkan.Swap_chain.offset; stride; fd; geometry } =
+let import ~sw ~on_release t { Vulkan.Swap_chain.offset; stride; fd; geometry; drm_format } =
   let fb =
     Eio_unix.Fd.use_exn "Vt.import" t.dev_fd @@ fun dev ->
     let handle = Eio_unix.Fd.use_exn "Dmabuf.to_handle" fd (Drm.Dmabuf.to_handle dev) in
     Fun.protect ~finally:(fun () -> Drm.Buffer.close dev handle) @@ fun () ->
     let planes = [{ K.Fb.Plane.handle; offset; pitch = stride }] in
-    K.Fb.add dev ~size:geometry ~pixel_format:Drm.Fourcc.xr24 ~planes
+    K.Fb.add dev ~size:geometry ~pixel_format:drm_format.code ~planes
+      ?modifier:(Vulkan.Drm_format.get_modifier_opt drm_format)
   in
   Switch.on_release sw (fun () ->
       Eio_unix.Fd.use_exn "Vt.import.release" t.dev_fd @@ fun dev ->
@@ -177,12 +182,13 @@ let frame t =
 
 let surface t =
   object (_ : Surface.t)
-    method format = B8g8r8a8_srgb
+    method format = vk_format
     method geometry = geometry t
     method frame = frame t
 
     method create_image ~sw ~device ~on_release geometry =
-      let image, dmabuf = Surface.create_image ~sw ~device ~format:B8g8r8a8_srgb geometry in
+      let drm_format = Vulkan.Drm_format.v pixel_format ~modifier:Drm.Modifier.reserved in
+      let image, dmabuf = Surface.create_image ~sw ~device ~format:vk_format ~drm_format geometry in
       let fb = import ~sw ~on_release t dmabuf in
       let buffer =
         object
