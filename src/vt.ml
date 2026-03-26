@@ -251,6 +251,8 @@ let surface t =
           let drm_format = Vulkan.Drm_format.v pixel_format ~modifier:Drm.Modifier.reserved in
           Surface.create_image ~sw ~device ~format:vk_format ~drm_format geometry
         | Some modifiers ->
+          let mods = Vulkan.Device.get_format_modifiers device vk_format in
+          Log.info (fun f -> f "Vulkan permitted modifiers: %a" (Fmt.Dump.list Drm.Modifier.pp) mods);
           let handle_type = Vkt.External_memory_handle_type_flags.dma_buf_ext in
           let dmabuf = create_framebuffer_with_modifiers ~sw ~modifiers t geometry in
           let image =

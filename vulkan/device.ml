@@ -33,6 +33,7 @@ module Ext(Device : sig val x : Vkt.Device.t end) : EXT = struct
 end
 
 type t = {
+  physical_device : Vkt.Physical_device.t;
   device : Vkt.Device.t;
   graphics_family : int;
   graphics_queue : Vkt.Queue.t;
@@ -81,12 +82,42 @@ let create ~sw ?(extensions=[]) physical_device =
   let graphics_queue = Vkc.get_device_queue device ~queue_family_index:graphics_family ~queue_index:0 in
   let ext = (module Ext(struct let x = device end) : EXT) in
   let memory_properties = Vkc.get_physical_device_memory_properties physical_device in
-  { device; graphics_family; graphics_queue; ext; memory_properties }
+  { physical_device; device; graphics_family; graphics_queue; ext; memory_properties }
 
 let get_memory_fd_properties_khr t ~handle_type fd =
   let (module E : EXT) = t.ext in
   Eio_unix.Fd.use_exn "get_memory_fd_properties_khr" fd @@ fun fd ->
   E.get_memory_fd_properties_khr ~handle_type (int_of_unix fd)
+
+let get_format_properties ~max t format =
+  let module L = Vkt.Drm_format_modifier_properties_list_ext in
+  let format_properties = Vkt.Format_properties.make () in
+  let drm_format_modifier_properties =
+    if max = 0 then None
+    else Some (Ctypes.CArray.make Vkt.Drm_format_modifier_properties_ext.ctype max)
+  in
+  let modifiers = L.make ?drm_format_modifier_properties () in
+  let rq =
+    Vkt.Format_properties_2.make ()
+      ~next:(ext (L.addr modifiers))
+      ~format_properties
+  in
+  Vk.Raw.get_physical_device_format_properties_2 t.physical_device format (Vkt.Format_properties_2.addr rq);
+  let n = L.drm_format_modifier_count modifiers |> Option.value ~default:0 in
+  let arr = L.drm_format_modifier_properties modifiers in
+  n, arr
+
+let get_format_modifiers t format =
+  let module L = Vkt.Drm_format_modifier_properties_list_ext in
+  let n, _ = get_format_properties ~max:0 t format in
+  match get_format_properties ~max:n t format with
+  | 0, _ | _, None -> []
+  | _, Some arr ->
+    List.init arr.alength (fun i ->
+        let e = Ctypes.CArray.get arr i in
+        Vkt.Drm_format_modifier_properties_ext.drm_format_modifier e
+        |> Drm.Modifier.of_uint64
+      )
 
 let find_memory_type t ~type_filter ~properties =
   let memory_properties = t.memory_properties in
