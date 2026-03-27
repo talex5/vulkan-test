@@ -57,7 +57,24 @@ let find_graphics_family physical_device =
     Log.debug (fun f -> f "Found graphics queue family (%d)" i);
     i
 
-let create ~sw ?(extensions=[]) physical_device =
+let make_features ?next () =
+  let module F = Vkt.Physical_device_features_2 in
+  let x = F.unsafe_make () in
+  Ctypes.setf x F.Fields.s_type Vkt.Structure_type.Physical_device_features_2;
+  next |> Option.iter (fun next ->
+      Gc.finalise_last (fun () -> ignore (Sys.opaque_identity next)) x;
+      Ctypes.setf x F.Fields.next (Some next);
+    );
+  F.addr x
+
+let make_features_1_1 features =
+  let module F = Vkt.Physical_device_vulkan_1_1_features in
+  let x = F.unsafe_make () in
+  Ctypes.setf x F.Fields.s_type Vkt.Structure_type.Physical_device_vulkan_1_1_features;
+  features |> List.iter (fun f -> Ctypes.setf x f true);
+  F.addr x
+
+let create ~sw ?(extensions=[]) ?(features_1_1=[]) physical_device =
   (* Create logical device with one graphics queue *)
   let graphics_family = find_graphics_family physical_device in
   let queue_create_infos =
@@ -76,7 +93,14 @@ let create ~sw ?(extensions=[]) physical_device =
       "VK_KHR_external_semaphore_fd";
     ] @ extensions)
   in
-  let create_info = Vkt.Device_create_info.make ~queue_create_infos ~enabled_extension_names () in
+  let enabled_features =
+    let v1_1 = make_features_1_1 features_1_1 in
+    make_features ~next:(ext v1_1) ()
+  in
+  let create_info =
+    Vkt.Device_create_info.make ~queue_create_infos ~enabled_extension_names ()
+      ~next:(ext enabled_features)
+  in
   let device = Vkc.create_device () ~physical_device ~create_info <?> "create_device" in
   Switch.on_release sw (fun () -> Vkc.destroy_device (Some device) None);
   let graphics_queue = Vkc.get_device_queue device ~queue_family_index:graphics_family ~queue_index:0 in
