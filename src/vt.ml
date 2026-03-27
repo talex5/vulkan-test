@@ -270,13 +270,16 @@ let surface t =
                 in
                 (m, [plane])
               ) in
+            (* The spec says "If the pNext chain includes a VkExternalMemoryImageCreateInfo ... whose handleTypes
+               member is not 0, it is as if VK_IMAGE_CREATE_ALIAS_BIT is set."
+               So we don't need to set [alias] here, and in fact doing so triggers a validation error on i915. *)
             Vulkan.Image.create ~sw device
               ~format:vk_format
               ~extent:(Vkt.Extent_3d.make ~width ~height ~depth:1)
               ~usage:Vkt.Image_usage_flags.color_attachment
               ~sharing_mode:Exclusive
               ~initial_layout:Undefined
-              ~flags:Vkt.Image_create_flags.alias
+              ~flags:Vkt.Image_create_flags.empty
               ~tiling:Drm_format_modifier_ext
               ~handle_types:handle_type
               ?drm_info
