@@ -25,7 +25,11 @@ module Ext(Device : sig val x : Vkt.Device.t end) : EXT = struct
     External_memory_fd.get_memory_fd_khr ~get_fd_info <?> "get_memory_fd_khr"
 
   let get_memory_fd_properties_khr ~handle_type fd =
-    External_memory_fd.get_memory_fd_properties_khr ~handle_type fd <?> "get_memory_fd_properties_khr"
+    let info = Vkt.Memory_fd_properties_khr.make ~memory_type_bits:0 () in
+    match External_memory_fd.Raw.get_memory_fd_properties_khr Device.x handle_type fd
+      (Vkt.Memory_fd_properties_khr.addr info) with
+    | Ok `Success -> info
+    | Error k -> Fmt.failwith "Error %a: %s" Vkt.Result.raw_pp k "get_memory_fd_properties_khr"
 end
 
 type t = {

@@ -226,7 +226,7 @@ let create_framebuffer_with_modifiers ~sw ~modifiers t (width, height) =
   let stride = Gbm.Bo.get_stride_for_plane bo 0 in
   let modifier = Gbm.Bo.get_modifier bo in
   let plane_count = Gbm.Bo.get_plane_count bo in
-  Log.info (fun f -> f "GBM selected modifier %a (%d planes)@." Drm.Modifier.pp modifier plane_count);
+  Log.info (fun f -> f "GBM selected modifier %a (%d planes)" Drm.Modifier.pp modifier plane_count);
   assert (Gbm.Bo.get_plane_count bo = 1);
   let fd = Eio_unix.Fd.of_unix ~sw ~close_unix:true (Gbm.Bo.get_fd bo) in
   Gbm.Bo.destroy bo;
