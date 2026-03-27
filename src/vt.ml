@@ -60,7 +60,7 @@ let read_events t =
   while true do
     Eio_unix.await_readable fd;
     let len = Unix.read_bigarray fd buffer 0 (Bigarray.Array1.dim buffer) in
-    Log.info (fun f -> f "Got %d bytes from DRM device" len);
+    Log.debug (fun f -> f "Got %d bytes from DRM device" len);
     Drm.Event.parse buffer len
     |> List.iter (function
         | Drm.Event.Flip_complete _ ->
@@ -160,10 +160,10 @@ let import ~sw t { Vulkan.Swap_chain.offset; stride; fd; geometry; drm_format } 
 
 let attach ~on_release t fb =
   while t.enqueued_fb <> None do
-    Log.info (fun f -> f "Wait for previous frame to be displayed before enqueuing another");
+    Log.debug (fun f -> f "Wait for previous frame to be displayed before enqueuing another");
     Eio.Condition.await_no_mutex t.flip_complete
   done;
-  Log.info (fun f -> f "Enqueue framebuffer %a" Drm.Id.pp fb);
+  Log.debug (fun f -> f "Enqueue framebuffer %a" Drm.Id.pp fb);
   Eio_unix.Fd.use_exn "Vt.attach" t.dev_fd (fun dev ->
       let rq = K.Atomic_req.create () in
       let ( .%{}<- ) obj k v = K.Atomic_req.add_property rq obj k v in

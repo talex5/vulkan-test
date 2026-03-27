@@ -43,7 +43,7 @@ let () =
   (* The cache spawns two threads and makes traces more confusing, so disable it. *)
   Unix.putenv "MESA_SHADER_CACHE_DISABLE" "1";
   (* Configure logging *)
-  Logs.set_level (Some Warning);
+  Logs.set_level (Some Info);
   Logs.set_reporter (Logs_fmt.reporter ~pp_header:Fmt.nop ());
   (* Start event loop *)
   Eio_main.run @@ fun env ->
