@@ -19,13 +19,19 @@ let connect bus =
       Log.info (fun f -> f "No $XDG_SESSION_ID; using PID instead.");
       Mgr.get_session_by_pid mgr ~pid:(Unix.getpid ())
     | Some session_id ->
-      Log.info (fun f -> f "Using session ID %S from $XDG_SESSION_ID@." session_id);
+      Log.info (fun f -> f "Using session ID %S from $XDG_SESSION_ID" session_id);
       Mgr.get_session mgr ~session_id
   in
   Lwt.return { session }
 
-let take_control ?(force=false) t = Session.take_control t.session ~force
-let release_control t = Session.release_control t.session
+let take_control ?(force=false) t =
+  Log.info (fun f -> f "Taking control of session (log output might not work properly after this)");
+  Session.take_control t.session ~force
+
+let release_control t =
+  let* () = Session.release_control t.session in
+  Log.info (fun f -> f "@.Released control of session");
+  Lwt.return_unit
 
 let interface t =
   (* Annoyingly, libinput requires us to do the RPC call within the callback,
@@ -51,7 +57,10 @@ let interface t =
       | "System.Error.ENODEV" -> Error Unix.ENODEV
       | "System.Error.EPERM" -> Error Unix.EPERM
       | "System.Error.ENOENT" -> Error Unix.ENOENT
-      | _ -> Printexc.raise_with_backtrace ex bt
+      | "org.freedesktop.DBus.Error.AccessDenied" -> Error Unix.EPERM
+      | x ->
+         Log.info (fun f -> f "TakeDevice failed: %s" x);
+	 Printexc.raise_with_backtrace ex bt
   in
   let close_restricted fd =
     let info = Unix.fstat fd in
